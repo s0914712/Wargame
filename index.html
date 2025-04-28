@@ -40,6 +40,22 @@
         #turnInfo {
             font-weight: bold;
         }
+        /* 放大 Free Chat with Gemini 的輸入框 */
+        #chatSection {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        #chatInput {
+            width: 100%;
+            height: 100px; /* 增加高度 */
+            resize: vertical; /* 允許垂直調整大小 */
+            padding: 5px;
+            font-size: 14px;
+        }
+        #chatButton {
+            align-self: flex-end; /* 按鈕靠右對齊 */
+        }
     </style>
 </head>
 <body>
@@ -78,9 +94,9 @@
             <div>
                 <button onclick="setLastKnownPosition()">Set Last Known Position</button>
             </div>
-            <div>
+            <div id="chatSection">
                 <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
-                <button onclick="chatWithGemini()">Free Chat with Gemini</button>
+                <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
             </div>
             <div id="turnInfo">Turn 1: PLA's turn</div>
             <button onclick="endTurn()">End Turn</button>
@@ -277,7 +293,7 @@
             draw();
         }
 
-        // 與後端交互（模擬）
+        // 與後端交互
         async function interactWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             try {
@@ -326,7 +342,7 @@
                 output = `Search ${searchNum} Results: Not Found\n`; // 模擬結果
                 probabilities = probabilities.map(p => p * 0.9); // 模擬更新概率
                 const total = probabilities.reduce((sum, val) => sum + val, 0);
-                probabilities = probabilities.map(p => p / total);
+                probabilities = probabilities.map(val => p / total);
                 draw();
             } else {
                 output = 'INVALID INPUT\n';
