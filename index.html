@@ -129,7 +129,7 @@
             </div>
             <div id="chatSection">
                 <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
-                <button id="chatButton">Free Chat with Gemini</button>
+                <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
             </div>
             <div id="turnInfo">Turn 1: PLA's turn</div>
             <button onclick="endTurn()">End Turn</button>
@@ -139,9 +139,6 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            console.error("Failed to get canvas context");
-        }
         let currentTool = null;
         let blueUnits = [];
         let redUnits = [];
@@ -161,7 +158,7 @@
         let currentRoom = 'none';
         let searchNum = 0;
 
-        const BASE_URL = 'https://us-central1-your-project-id.cloudfunctions.net/wargame'; // 替換為你的 Cloud Function URL
+        const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app'; // 替換為你的 Cloud Function URL
 
         const mapImage = new Image();
         mapImage.src = 'https://raw.githubusercontent.com/s0914712/Wargame/main/Taiwan.png';
@@ -207,7 +204,6 @@
             if (room === 'none') {
                 currentRoom = 'none';
                 updateRoom();
-                stopSyncing();
                 return;
             }
 
@@ -224,18 +220,15 @@
                     alert(data.error);
                     document.getElementById('roomSelect').value = 'none';
                     currentRoom = 'none';
-                    stopSyncing();
                 } else {
                     currentRoom = room;
                     updateRoom();
                     updateRoomStatus();
-                    startSyncing();
                 }
             } catch (error) {
                 alert('Error selecting room: ' + error.message);
                 document.getElementById('roomSelect').value = 'none';
                 currentRoom = 'none';
-                stopSyncing();
             }
         }
 
@@ -298,26 +291,6 @@
             }
         }
 
-        let syncInterval = null;
-        let roomStatusInterval = null;
-
-        function startSyncing() {
-            if (syncInterval || roomStatusInterval) return;
-            syncInterval = setInterval(syncUnits, 10000);
-            roomStatusInterval = setInterval(updateRoomStatus, 10000);
-        }
-
-        function stopSyncing() {
-            if (syncInterval) {
-                clearInterval(syncInterval);
-                syncInterval = null;
-            }
-            if (roomStatusInterval) {
-                clearInterval(roomStatusInterval);
-                roomStatusInterval = null;
-            }
-        }
-
         async function saveUnits() {
             if (currentRoom === 'none') return;
             const units = currentRoom === 'blue' ? blueUnits : redUnits;
@@ -333,6 +306,9 @@
                 console.error('Error saving units:', error);
             }
         }
+
+        setInterval(syncUnits, 5000);
+        setInterval(updateRoomStatus, 5000);
 
         function toggleOpponentPosition() {
             showOpponent = !showOpponent;
@@ -502,27 +478,9 @@
         }
 
         async function chatWithGemini() {
-            console.log("chatWithGemini triggered");
-            const canvas = document.getElementById('gameCanvas');
-            if (!canvas) {
-                console.error("Canvas element not found");
-                return;
-            }
             const canvasData = canvas.toDataURL('image/png');
-            console.log("canvasData:", canvasData.substring(0, 50));
-            const chatInput = document.getElementById('chatInput');
-            if (!chatInput) {
-                console.error("chatInput element not found");
-                return;
-            }
-            const userInput = chatInput.value;
-            if (!userInput) {
-                alert("Please enter a message!");
-                return;
-            }
-            console.log("userInput:", userInput);
+            const userInput = document.getElementById('chatInput').value;
             try {
-                console.log("Sending fetch request to /chat");
                 const response = await fetch(`${BASE_URL}/chat`, {
                     method: 'POST',
                     headers: {
@@ -530,16 +488,10 @@
                     },
                     body: JSON.stringify({ image: canvasData, message: userInput }),
                 });
-                console.log("Response status:", response.status);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
                 const data = await response.json();
-                console.log("Response data:", data);
                 document.getElementById('responseArea').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
                 document.getElementById('chatInput').value = '';
             } catch (error) {
-                console.error("Fetch error:", error);
                 document.getElementById('responseArea').value += `\nError: ${error.message}\n`;
             }
         }
@@ -664,8 +616,6 @@
 
             draw();
         });
-
-        document.getElementById('chatButton').addEventListener('click', chatWithGemini);
 
         mapImage.onload = () => {
             console.log('Map image loaded successfully');
