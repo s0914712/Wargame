@@ -201,7 +201,7 @@
             }
 
             try {
-                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/select_room', {
+                const response = await fetch('https://wargame-1087471739366.us-central1.run.app/select_room', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -265,7 +265,7 @@
         // 更新房間狀態顯示
         async function updateRoomStatus() {
             try {
-                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/get_room_state');
+                const response = await fetch('https://wargame-1087471739366.us-central1.run.app/get_room_state');
                 const data = await response.json();
                 document.getElementById('blueIp').textContent = data.room_state.blue_ip || 'Not joined';
                 document.getElementById('redIp').textContent = data.room_state.red_ip || 'Not joined';
@@ -277,7 +277,7 @@
         // 同步單位數據
         async function syncUnits() {
             try {
-                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/get_units');
+                const response = await fetch('https://wargame-1087471739366.us-central1.run.app/get_units');
                 const data = await response.json();
                 blueUnits = data.blueUnits || [];
                 redUnits = data.redUnits || [];
@@ -292,7 +292,7 @@
             if (currentRoom === 'none') return;
             const units = currentRoom === 'blue' ? blueUnits : redUnits;
             try {
-                await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/save_units', {
+                await fetch('https://wargame-1087471739366.us-central1.run.app/save_units', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -462,7 +462,7 @@
         async function interactWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             try {
-                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/find_risk', {
+                const response = await fetch('https://wargame-1087471739366.us-central1.run.appt/find_risk', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -480,7 +480,7 @@
             const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
             try {
-                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/chat', {
+                const response = await fetch('https://wargame-1087471739366.us-central1.run.app/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
