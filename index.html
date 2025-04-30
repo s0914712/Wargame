@@ -39,7 +39,7 @@
             padding: 5px;
             margin: 2px;
         }
-        #responseArea, #bayesOutput {
+        #bayesOutput, #chatOutput {
             width: 100%;
             height: 150px;
             resize: none;
@@ -110,10 +110,6 @@
         </div>
         <div id="controls">
             <div>
-                <button onclick="interactWithGemini()">Talk to Find Risk</button>
-                <textarea id="responseArea" readonly></textarea>
-            </div>
-            <div>
                 <button onclick="toggleSearchAreas()">Display Search Plan</button>
             </div>
             <div>
@@ -130,6 +126,7 @@
             <div id="chatSection">
                 <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
                 <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
+                <textarea id="chatOutput" readonly></textarea>
             </div>
             <div id="turnInfo">Turn 1: PLA's turn</div>
             <button onclick="endTurn()">End Turn</button>
@@ -158,7 +155,7 @@
         let currentRoom = 'none';
         let searchNum = 0;
 
-        const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app'; // 替換為你的 Cloud Function URL
+        const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
         mapImage.src = 'https://raw.githubusercontent.com/s0914712/Wargame/main/Taiwan.png';
@@ -460,27 +457,11 @@
             draw();
         }
 
-        async function interactWithGemini() {
-            const canvasData = canvas.toDataURL('image/png');
-            try {
-                const response = await fetch(`${BASE_URL}/find_risk`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ image: canvasData }),
-                });
-                const data = await response.json();
-                document.getElementById('responseArea').value = data.message || 'No response';
-            } catch (error) {
-                document.getElementById('responseArea').value = `Error: ${error.message}`;
-            }
-        }
-
         async function chatWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
             try {
+                console.log('Sending request to /chat with input:', userInput);
                 const response = await fetch(`${BASE_URL}/chat`, {
                     method: 'POST',
                     headers: {
@@ -489,10 +470,12 @@
                     body: JSON.stringify({ image: canvasData, message: userInput }),
                 });
                 const data = await response.json();
-                document.getElementById('responseArea').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
+                console.log('Response from /chat:', data);
+                document.getElementById('chatOutput').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
                 document.getElementById('chatInput').value = '';
             } catch (error) {
-                document.getElementById('responseArea').value += `\nError: ${error.message}\n`;
+                console.error('Error in chatWithGemini:', error);
+                document.getElementById('chatOutput').value += `\nError: ${error.message}\n`;
             }
         }
 
