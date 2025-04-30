@@ -69,6 +69,10 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
+        #roomStatus {
+            margin-top: 10px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -76,7 +80,7 @@
     <div id="header">
         <div id="roomSelection">
             <label for="roomSelect">Select Room: </label>
-            <select id="roomSelect" onchange="updateRoom()">
+            <select id="roomSelect" onchange="selectRoom()">
                 <option value="none">Select a room</option>
                 <option value="blue">Blue Room</option>
                 <option value="red">Red Room</option>
@@ -95,6 +99,10 @@
         <button onclick="undo()">Undo</button>
         <button onclick="setTool('select')">Select Unit</button>
         <button onclick="setTool('delete')">Delete Unit</button>
+    </div>
+    <div id="roomStatus">
+        <p>Blue Player: <span id="blueIp">Not joined</span></p>
+        <p>Red Player: <span id="redIp">Not joined</span></p>
     </div>
     <div id="container">
         <div id="canvas-container">
@@ -150,7 +158,6 @@
         let currentRoom = 'none';
         let searchNum = 0;
 
-        // 定義地圖和搜索區域
         const mapImage = new Image();
         mapImage.src = 'Taiwan.png';
         const GRID_ROWS = 4;
@@ -170,7 +177,6 @@
             }
         }
 
-        // 初始化概率
         let probabilities = initializeProbabilities();
 
         function initializeProbabilities() {
@@ -185,9 +191,42 @@
             return probs.map(val => val / total);
         }
 
-        // 更新房間選擇
+        // 選擇房間並同步房間狀態
+        async function selectRoom() {
+            const room = document.getElementById('roomSelect').value;
+            if (room === 'none') {
+                currentRoom = 'none';
+                updateRoom();
+                return;
+            }
+
+            try {
+                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/select_room', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ room }),
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                    document.getElementById('roomSelect').value = 'none';
+                    currentRoom = 'none';
+                } else {
+                    currentRoom = room;
+                    updateRoom();
+                    updateRoomStatus();
+                }
+            } catch (error) {
+                alert('Error selecting room: ' + error.message);
+                document.getElementById('roomSelect').value = 'none';
+                currentRoom = 'none';
+            }
+        }
+
+        // 更新房間按鈕狀態
         function updateRoom() {
-            currentRoom = document.getElementById('roomSelect').value;
             const plaNavyBtn = document.getElementById('plaNavyBtn');
             const plaPlaneBtn = document.getElementById('plaPlaneBtn');
             const twnNavyBtn = document.getElementById('twnNavyBtn');
@@ -223,13 +262,58 @@
             }
         }
 
+        // 更新房間狀態顯示
+        async function updateRoomStatus() {
+            try {
+                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/get_room_state');
+                const data = await response.json();
+                document.getElementById('blueIp').textContent = data.room_state.blue_ip || 'Not joined';
+                document.getElementById('redIp').textContent = data.room_state.red_ip || 'Not joined';
+            } catch (error) {
+                console.error('Error updating room status:', error);
+            }
+        }
+
+        // 同步單位數據
+        async function syncUnits() {
+            try {
+                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/get_units');
+                const data = await response.json();
+                blueUnits = data.blueUnits || [];
+                redUnits = data.redUnits || [];
+                draw();
+            } catch (error) {
+                console.error('Error syncing units:', error);
+            }
+        }
+
+        // 保存單位數據
+        async function saveUnits() {
+            if (currentRoom === 'none') return;
+            const units = currentRoom === 'blue' ? blueUnits : redUnits;
+            try {
+                await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/save_units', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ room: currentRoom, units }),
+                });
+            } catch (error) {
+                console.error('Error saving units:', error);
+            }
+        }
+
+        // 定時同步單位數據（每 5 秒）
+        setInterval(syncUnits, 5000);
+        setInterval(updateRoomStatus, 5000);
+
         // 切換顯示對方態勢
         function toggleOpponentPosition() {
             showOpponent = !showOpponent;
             draw();
         }
 
-        // 繪製地圖和單位
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
@@ -352,6 +436,7 @@
                 circles.pop();
             }
             draw();
+            saveUnits();
         }
 
         function toggleSearchAreas() {
@@ -447,6 +532,7 @@
                 if (unitIndex !== -1) {
                     myUnits.splice(unitIndex, 1);
                     currentTool = null;
+                    saveUnits();
                 }
             } else if (currentTool === 'ruler') {
                 rulerStart = { x, y };
@@ -459,12 +545,16 @@
                 currentTool = null;
             } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
                 redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy' });
+                saveUnits();
             } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
                 redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane' });
+                saveUnits();
             } else if (currentTool === 'twn' && currentRoom === 'blue') {
                 blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn' });
+                saveUnits();
             } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
                 blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane' });
+                saveUnits();
             } else if (currentTool === 'small_search') {
                 circles.push({ x, y, radius: 35, color: 'yellow' });
             } else if (currentTool === 'large_search') {
@@ -513,6 +603,7 @@
             if (draggingUnit) {
                 draggingUnit = null;
                 dragStart = null;
+                saveUnits();
             } else if (rulerStart) {
                 rulerEnd = { x, y };
             } else if (lineStart) {
@@ -527,6 +618,8 @@
 
         mapImage.onload = () => {
             draw();
+            syncUnits();
+            updateRoomStatus();
         };
     </script>
 </body>
