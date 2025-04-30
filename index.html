@@ -24,7 +24,7 @@
         }
         #canvas-container {
             flex: 2;
-            position: relative; /* For positioning the context menu */
+            position: relative;
         }
         #controls {
             flex: 1;
@@ -177,10 +177,12 @@
         let currentRoom = 'none';
         let searchNum = 0;
         let isPendingChange = false;
-        let selectedUnit = null; // Track the currently selected unit
-        let attackMode = false; // Track if we're in attack mode
-        const MOVE_RANGE = 80; // Movement range (same as before)
-        const ATTACK_RANGE = MOVE_RANGE * 2; // Attack range is twice the move range
+        let selectedUnit = null;
+        let attackMode = false;
+        const MOVE_RANGE = 80;
+        const ATTACK_RANGE = MOVE_RANGE * 2;
+        const PLANE_SURVEILLANCE_RADIUS = 150; // Larger radius for planes
+        const NAVY_SURVEILLANCE_RADIUS = 50;   // Smaller radius for navy units
 
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
@@ -374,6 +376,10 @@
             draw();
         }
 
+        function calculateDistance(point1, point2) {
+            return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+        }
+
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
@@ -394,6 +400,25 @@
             }
 
             const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
+
+            // Calculate which opponent units are visible based on surveillance
+            const visibleOpponentUnits = [];
+            opponentUnits.forEach(opponent => {
+                let isVisible = false;
+                myUnits.forEach(myUnit => {
+                    const distance = calculateDistance(myUnit, opponent);
+                    const surveillanceRadius = (myUnit.type === 'pla_plane' || myUnit.type === 'twn_plane') ? PLANE_SURVEILLANCE_RADIUS : NAVY_SURVEILLANCE_RADIUS;
+                    if (distance <= surveillanceRadius) {
+                        isVisible = true;
+                    }
+                });
+                if (isVisible || showOpponent) {
+                    visibleOpponentUnits.push(opponent);
+                }
+            });
+
+            // Draw my units
             myUnits.forEach(unit => {
                 ctx.beginPath();
                 ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
@@ -438,20 +463,18 @@
                 }
             });
 
-            if (showOpponent) {
-                const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
-                opponentUnits.forEach(unit => {
-                    ctx.beginPath();
-                    ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
-                    ctx.strokeStyle = unit.color;
-                    ctx.lineWidth = 2;
-                    ctx.globalAlpha = 0.5;
-                    ctx.setLineDash([5, 5]);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.globalAlpha = 1.0;
-                });
-            }
+            // Draw visible opponent units
+            visibleOpponentUnits.forEach(unit => {
+                ctx.beginPath();
+                ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
+                ctx.strokeStyle = unit.color;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 1.0;
+            });
 
             circles.forEach(circle => {
                 ctx.beginPath();
@@ -480,7 +503,7 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                const distance = calculateDistance(rulerStart, rulerEnd);
+                const distance = (calculateDistance(rulerStart, rulerEnd) - 5) / 10;
                 const midX = (rulerStart.x + rulerEnd.x) / 2;
                 const midY = (rulerStart.y + rulerEnd.y) / 2;
                 ctx.fillStyle = 'black';
@@ -493,10 +516,6 @@
             ctx.fillText('+ = Last Known Position', lastKnownPosition.x + 20, lastKnownPosition.y);
         }
 
-        function calculateDistance(start, end) {
-            return (Math.sqrt(Math.pow(start.x - end.x, 2) + Math.pow(start.y - end.y, 2)) - 5) / 10;
-        }
-
         function setTool(tool) {
             if (currentRoom === 'none' && tool !== 'delete' && tool !== 'select') {
                 alert('Please select a room first!');
@@ -507,7 +526,7 @@
             rulerEnd = null;
             lineStart = null;
             lineEnd = null;
-            attackMode = false; // Reset attack mode when selecting a new tool
+            attackMode = false;
             draw();
         }
 
@@ -645,7 +664,6 @@
             } else if (action === 'attack') {
                 attackMode = true;
                 draw();
-                // Allow clicking within attack range to "attack" (for now, just log the action)
                 canvas.addEventListener('mousedown', handleAttack, { once: true });
             } else if (action === 'delete') {
                 deleteUnit(selectedUnit);
@@ -660,10 +678,9 @@
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            const distance = Math.sqrt(Math.pow(x - selectedUnit.x, 2) + Math.pow(y - selectedUnit.y, 2));
+            const distance = calculateDistance({ x: selectedUnit.x, y: selectedUnit.y }, { x, y });
             if (distance <= ATTACK_RANGE) {
                 console.log(`Unit at (${selectedUnit.x}, ${selectedUnit.y}) attacks position (${x}, ${y})`);
-                // You can add logic here to handle the attack (e.g., check for enemy units in range)
             } else {
                 console.log('Target is out of attack range');
             }
@@ -697,7 +714,7 @@
         });
 
         canvas.addEventListener('mousedown', async (e) => {
-            if (e.button === 2) return; // Ignore right-click (handled by contextmenu)
+            if (e.button === 2) return;
 
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -727,16 +744,16 @@
                 lastKnownPosition = { x, y };
                 currentTool = null;
             } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
-                redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy' });
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
                 saveUnits();
             } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
-                redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane' });
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
                 saveUnits();
             } else if (currentTool === 'twn' && currentRoom === 'blue') {
-                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn' });
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
                 saveUnits();
             } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
-                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane' });
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
                 saveUnits();
             } else if (currentTool === 'small_search') {
                 circles.push({ x, y, radius: 35, color: 'yellow' });
@@ -759,7 +776,7 @@
                 let newX = draggingUnit.x + dx;
                 let newY = draggingUnit.y + dy;
 
-                const distance = Math.sqrt(Math.pow(newX - draggingUnit.initialX, 2) + Math.pow(newY - draggingUnit.initialY, 2));
+                const distance = calculateDistance({ x: newX, y: newY }, { x: draggingUnit.initialX, y: draggingUnit.initialY });
                 if (distance <= MOVE_RANGE) {
                     draggingUnit.x = newX;
                     draggingUnit.y = newY;
@@ -779,7 +796,7 @@
         });
 
         canvas.addEventListener('mouseup', async (e) => {
-            if (e.button === 2) return; // Ignore right-click
+            if (e.button === 2) return;
 
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
