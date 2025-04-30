@@ -11,13 +11,6 @@
             padding: 10px;
             background-color: #f0f0f0;
         }
-        #header {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 10px;
-            align-items: center;
-        }
         #container {
             display: flex;
             gap: 10px;
@@ -63,7 +56,7 @@
             align-self: flex-end;
         }
         #roomSelection {
-            margin-right: 10px;
+            margin-bottom: 10px;
         }
         .disabled {
             background-color: #ccc;
@@ -73,34 +66,33 @@
 </head>
 <body>
     <h1>War at Sea Tool</h1>
-    <div id="header">
-        <div id="roomSelection">
-            <label for="roomSelect">Select Room: </label>
-            <select id="roomSelect" onchange="updateRoom()">
-                <option value="none">Select a room</option>
-                <option value="blue">Blue Room</option>
-                <option value="red">Red Room</option>
-            </select>
-        </div>
-        <div id="unitButtons">
-            <button id="plaNavyBtn" onclick="setTool('pla_navy')" disabled>PLA Navy</button>
-            <button id="plaPlaneBtn" onclick="setTool('pla_plane')" disabled>PLA Plane</button>
-            <button id="twnNavyBtn" onclick="setTool('twn')" disabled>Taiwan Navy</button>
-            <button id="twnPlaneBtn" onclick="setTool('twn_plane')" disabled>Taiwan Plane</button>
-        </div>
-        <button onclick="setTool('small_search')">Small Search</button>
-        <button onclick="setTool('large_search')">Large Search</button>
-        <button onclick="setTool('ruler')">Ruler</button>
-        <button onclick="setTool('line')">Line</button>
-        <button onclick="undo()">Undo</button>
-        <button onclick="setTool('select')">Select Unit</button>
-        <button onclick="setTool('delete')">Delete Unit</button>
+    <div id="roomSelection">
+        <label for="roomSelect">Select Room: </label>
+        <select id="roomSelect" onchange="updateRoom()">
+            <option value="none">Select a room</option>
+            <option value="blue">Blue Room</option>
+            <option value="red">Red Room</option>
+        </select>
     </div>
     <div id="container">
         <div id="canvas-container">
             <canvas id="gameCanvas" width="800" height="600"></canvas>
         </div>
         <div id="controls">
+            <div id="unitButtons">
+                <button id="plaNavyBtn" onclick="setTool('pla_navy')" disabled>PLA Navy</button>
+                <button id="plaPlaneBtn" onclick="setTool('pla_plane')" disabled>PLA Plane</button>
+                <button id="twnNavyBtn" onclick="setTool('twn')" disabled>Taiwan Navy</button>
+                <button id="twnPlaneBtn" onclick="setTool('twn_plane')" disabled>Taiwan Plane</button>
+            </div>
+            <div>
+                <button onclick="setTool('small_search')">Small Search</button>
+                <button onclick="setTool('large_search')">Large Search</button>
+                <button onclick="setTool('ruler')">Ruler</button>
+                <button onclick="setTool('line')">Line</button>
+                <button onclick="undo()">Undo</button>
+                <button onclick="setTool('select')">Select Unit</button>
+            </div>
             <div>
                 <button onclick="interactWithGemini()">Talk to Find Risk</button>
                 <textarea id="responseArea" readonly></textarea>
@@ -132,8 +124,8 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         let currentTool = null;
-        let blueUnits = [];
-        let redUnits = [];
+        let blueUnits = []; // Blue 玩家的單位
+        let redUnits = [];  // Red 玩家的單位
         let circles = [];
         let lines = [];
         let rulerStart = null;
@@ -143,16 +135,16 @@
         let draggingUnit = null;
         let dragStart = null;
         let showSearchAreas = true;
-        let showOpponent = false;
+        let showOpponent = false; // 控制是否顯示對方態勢
         let lastKnownPosition = { x: 500, y: 600 };
         let turnCount = 1;
         let currentPlayer = 'PLA';
-        let currentRoom = 'none';
+        let currentRoom = 'none'; // 當前房間
         let searchNum = 0;
 
         // 定義地圖和搜索區域
         const mapImage = new Image();
-        mapImage.src = 'Taiwan.png';
+        mapImage.src = 'Taiwan.png'; // 替換為你的地圖圖片路徑
         const GRID_ROWS = 4;
         const GRID_COLS = 6;
         const GRID_START_X = 100;
@@ -234,6 +226,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
 
+            // 繪製搜索區域
             if (showSearchAreas) {
                 SEARCH_AREAS.forEach((area, i) => {
                     const prob = probabilities[i];
@@ -249,6 +242,7 @@
                 });
             }
 
+            // 繪製己方單位
             const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
             myUnits.forEach(unit => {
                 ctx.beginPath();
@@ -274,6 +268,7 @@
                 }
             });
 
+            // 繪製對方單位（如果啟用）
             if (showOpponent) {
                 const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
                 opponentUnits.forEach(unit => {
@@ -281,14 +276,15 @@
                     ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
                     ctx.strokeStyle = unit.color;
                     ctx.lineWidth = 2;
-                    ctx.globalAlpha = 0.5;
-                    ctx.setLineDash([5, 5]);
+                    ctx.globalAlpha = 0.5; // 半透明顯示對方單位
+                    ctx.setLineDash([5, 5]); // 虛線
                     ctx.stroke();
                     ctx.setLineDash([]);
-                    ctx.globalAlpha = 1.0;
+                    ctx.globalAlpha = 1.0; // 恢復透明度
                 });
             }
 
+            // 繪製搜索圓形
             circles.forEach(circle => {
                 ctx.beginPath();
                 ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
@@ -297,6 +293,7 @@
                 ctx.stroke();
             });
 
+            // 繪製線條
             lines.forEach(line => {
                 ctx.beginPath();
                 ctx.moveTo(line.startX, line.startY);
@@ -306,6 +303,7 @@
                 ctx.stroke();
             });
 
+            // 繪製標尺
             if (rulerStart && rulerEnd) {
                 ctx.beginPath();
                 ctx.moveTo(rulerStart.x, rulerStart.y);
@@ -323,6 +321,7 @@
                 ctx.fillText(`${distance.toFixed(2)} ''`, midX, midY);
             }
 
+            // 繪製最後已知位置
             ctx.fillStyle = 'red';
             ctx.font = '16px Arial';
             ctx.fillText('+', lastKnownPosition.x, lastKnownPosition.y);
@@ -333,8 +332,9 @@
             return (Math.sqrt(Math.pow(start.x - end.x, 2) + Math.pow(start.y - end.y, 2)) - 5) / 10;
         }
 
+        // 設置工具
         function setTool(tool) {
-            if (currentRoom === 'none' && tool !== 'delete' && tool !== 'select') {
+            if (currentRoom === 'none') {
                 alert('Please select a room first!');
                 return;
             }
@@ -345,6 +345,7 @@
             lineEnd = null;
         }
 
+        // 撤銷操作
         function undo() {
             if (lines.length > 0) {
                 lines.pop();
@@ -354,15 +355,18 @@
             draw();
         }
 
+        // 切換搜索區域顯示
         function toggleSearchAreas() {
             showSearchAreas = !showSearchAreas;
             draw();
         }
 
+        // 設置最後已知位置
         function setLastKnownPosition() {
             setTool('last_known');
         }
 
+        // 結束回合
         function endTurn() {
             if (currentPlayer === 'PLA') {
                 currentPlayer = 'TAIWAN';
@@ -374,6 +378,7 @@
             draw();
         }
 
+        // 與後端交互
         async function interactWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             try {
@@ -391,6 +396,7 @@
             }
         }
 
+        // 自由聊天
         async function chatWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
@@ -410,6 +416,7 @@
             }
         }
 
+        // 貝葉斯搜索（模擬）
         function runBayesSearch() {
             const choice = document.getElementById('bayesInput').value;
             let output = '';
@@ -428,6 +435,7 @@
             document.getElementById('bayesOutput').value = output;
         }
 
+        // 滑鼠事件處理
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -441,13 +449,6 @@
                         dragStart = { x, y };
                     }
                 });
-            } else if (currentTool === 'delete') {
-                const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
-                const unitIndex = myUnits.findIndex(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
-                if (unitIndex !== -1) {
-                    myUnits.splice(unitIndex, 1);
-                    currentTool = null;
-                }
             } else if (currentTool === 'ruler') {
                 rulerStart = { x, y };
                 rulerEnd = null;
@@ -525,6 +526,7 @@
             draw();
         });
 
+        // 當地圖圖片加載完成後繪製
         mapImage.onload = () => {
             draw();
         };
