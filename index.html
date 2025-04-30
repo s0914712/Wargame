@@ -475,10 +475,16 @@
                 document.getElementById('responseArea').value = `Error: ${error.message}`;
             }
         }
-
         async function chatWithGemini() {
+            console.log("chatWithGemini triggered");
             const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
+            if (!userInput) {
+                alert("Please enter a message!");
+                return;
+            }
+            console.log("canvasData:", canvasData.substring(0, 50));
+            console.log("userInput:", userInput);
             try {
                 const response = await fetch(`${BASE_URL}/chat`, {
                     method: 'POST',
@@ -487,13 +493,20 @@
                     },
                     body: JSON.stringify({ image: canvasData, message: userInput }),
                 });
+                console.log("Response status:", response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
+                console.log("Response data:", data);
                 document.getElementById('responseArea').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
                 document.getElementById('chatInput').value = '';
             } catch (error) {
+                console.error("Fetch error:", error);
                 document.getElementById('responseArea').value += `\nError: ${error.message}\n`;
             }
         }
+        
 
         function runBayesSearch() {
             const choice = document.getElementById('bayesInput').value;
