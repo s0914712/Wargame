@@ -154,17 +154,20 @@
         let currentPlayer = 'PLA';
         let currentRoom = 'none';
         let searchNum = 0;
+        let isPendingChange = false; // Track if a local change is pending
 
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
-        mapImage.src = 'Taiwan.png';
+        mapImage.crossOrigin = 'anonymous'; // Required if the image is on a different domain with CORS support
+        mapImage.src = 'Taiwan.png'; // Use a local file or a CORS-enabled URL
         mapImage.onerror = () => {
             console.error('Failed to load map image at: ' + mapImage.src);
             ctx.fillStyle = 'white';
             ctx.font = '20px Arial';
             ctx.fillText('Failed to load map image.', 50, 50);
         };
+
         const GRID_ROWS = 4;
         const GRID_COLS = 6;
         const GRID_START_X = 100;
@@ -277,8 +280,16 @@
         }
 
         async function syncUnits() {
+            if (isPendingChange) {
+                console.log('Skipping syncUnits due to pending change');
+                return;
+            }
+
             try {
                 const response = await fetch(`${BASE_URL}/get_units`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch units: ${response.statusText}`);
+                }
                 const data = await response.json();
                 blueUnits = data.blueUnits || [];
                 redUnits = data.redUnits || [];
@@ -290,17 +301,42 @@
 
         async function saveUnits() {
             if (currentRoom === 'none') return;
+
             const units = currentRoom === 'blue' ? blueUnits : redUnits;
-            try {
-                await fetch(`${BASE_URL}/save_units`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ room: currentRoom, units }),
-                });
-            } catch (error) {
-                console.error('Error saving units:', error);
+            const maxRetries = 3;
+            let retryCount = 0;
+
+            isPendingChange = true; // Mark that a change is pending
+
+            while (retryCount < maxRetries) {
+                try {
+                    const response = await fetch(`${BASE_URL}/save_units`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ room: currentRoom, units }),
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Failed to save units: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    console.log('Units saved successfully:', data);
+                    isPendingChange = false; // Clear pending change flag
+                    return true;
+                } catch (error) {
+                    retryCount++;
+                    console.error(`Error saving units (attempt ${retryCount}/${maxRetries}):`, error);
+                    if (retryCount === maxRetries) {
+                        alert('Failed to save units after multiple attempts. Please try again.');
+                        isPendingChange = false;
+                        return false;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
+                }
             }
         }
 
@@ -458,20 +494,40 @@
         }
 
         async function chatWithGemini() {
-            const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
+            if (!userInput) {
+                document.getElementById('chatOutput').value += '\nError: Please enter a message.\n';
+                return;
+            }
+
+            let canvasData = null;
+            try {
+                canvasData = canvas.toDataURL('image/png');
+            } catch (error) {
+                console.error('Failed to export canvas:', error);
+                document.getElementById('chatOutput').value += `\nError: Failed to export canvas - ${error.message}\n`;
+            }
+
             try {
                 console.log('Sending request to /chat with input:', userInput);
+                const body = { message: userInput };
+                if (canvasData) {
+                    body.image = canvasData;
+                }
                 const response = await fetch(`${BASE_URL}/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ image: canvasData, message: userInput }),
+                    body: JSON.stringify(body),
                 });
                 const data = await response.json();
                 console.log('Response from /chat:', data);
-                document.getElementById('chatOutput').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
+                if (data.error) {
+                    document.getElementById('chatOutput').value += `\nError: ${data.error}\n`;
+                } else {
+                    document.getElementById('chatOutput').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
+                }
                 document.getElementById('chatInput').value = '';
             } catch (error) {
                 console.error('Error in chatWithGemini:', error);
@@ -497,7 +553,7 @@
             document.getElementById('bayesOutput').value = output;
         }
 
-        canvas.addEventListener('mousedown', (e) => {
+        canvas.addEventListener('mousedown', async (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -514,9 +570,14 @@
                 const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
                 const unitIndex = myUnits.findIndex(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
                 if (unitIndex !== -1) {
-                    myUnits.splice(unitIndex, 1);
+                    myUnits.splice(unitIndex, 1); // Remove locally first to update UI
+                    draw(); // Redraw immediately to show the unit is gone
+                    const success = await saveUnits(); // Save to backend
+                    if (!success) {
+                        // If save fails, revert the deletion
+                        await syncUnits(); // Fetch the latest units from the backend
+                    }
                     currentTool = null;
-                    saveUnits();
                 }
             } else if (currentTool === 'ruler') {
                 rulerStart = { x, y };
@@ -579,7 +640,7 @@
             draw();
         });
 
-        canvas.addEventListener('mouseup', (e) => {
+        canvas.addEventListener('mouseup', async (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -587,7 +648,7 @@
             if (draggingUnit) {
                 draggingUnit = null;
                 dragStart = null;
-                saveUnits();
+                await saveUnits();
             } else if (rulerStart) {
                 rulerEnd = { x, y };
             } else if (lineStart) {
