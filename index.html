@@ -11,6 +11,13 @@
             padding: 10px;
             background-color: #f0f0f0;
         }
+        #header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
         #container {
             display: flex;
             gap: 10px;
@@ -40,7 +47,6 @@
         #turnInfo {
             font-weight: bold;
         }
-        /* 放大 Free Chat with Gemini 的輸入框 */
         #chatSection {
             display: flex;
             flex-direction: column;
@@ -48,37 +54,53 @@
         }
         #chatInput {
             width: 100%;
-            height: 100px; /* 增加高度 */
-            resize: vertical; /* 允許垂直調整大小 */
+            height: 100px;
+            resize: vertical;
             padding: 5px;
             font-size: 14px;
         }
         #chatButton {
-            align-self: flex-end; /* 按鈕靠右對齊 */
+            align-self: flex-end;
+        }
+        #roomSelection {
+            margin-right: 10px;
+        }
+        .disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
         }
     </style>
 </head>
 <body>
     <h1>War at Sea Tool</h1>
+    <div id="header">
+        <div id="roomSelection">
+            <label for="roomSelect">Select Room: </label>
+            <select id="roomSelect" onchange="updateRoom()">
+                <option value="none">Select a room</option>
+                <option value="blue">Blue Room</option>
+                <option value="red">Red Room</option>
+            </select>
+        </div>
+        <div id="unitButtons">
+            <button id="plaNavyBtn" onclick="setTool('pla_navy')" disabled>PLA Navy</button>
+            <button id="plaPlaneBtn" onclick="setTool('pla_plane')" disabled>PLA Plane</button>
+            <button id="twnNavyBtn" onclick="setTool('twn')" disabled>Taiwan Navy</button>
+            <button id="twnPlaneBtn" onclick="setTool('twn_plane')" disabled>Taiwan Plane</button>
+        </div>
+        <button onclick="setTool('small_search')">Small Search</button>
+        <button onclick="setTool('large_search')">Large Search</button>
+        <button onclick="setTool('ruler')">Ruler</button>
+        <button onclick="setTool('line')">Line</button>
+        <button onclick="undo()">Undo</button>
+        <button onclick="setTool('select')">Select Unit</button>
+        <button onclick="setTool('delete')">Delete Unit</button>
+    </div>
     <div id="container">
         <div id="canvas-container">
             <canvas id="gameCanvas" width="800" height="600"></canvas>
         </div>
         <div id="controls">
-            <div>
-                <button onclick="setTool('pla_navy')">PLA Navy</button>
-                <button onclick="setTool('pla_plane')">PLA Plane</button>
-                <button onclick="setTool('twn')">Taiwan Navy</button>
-                <button onclick="setTool('twn_plane')">Taiwan Plane</button>
-            </div>
-            <div>
-                <button onclick="setTool('small_search')">Small Search</button>
-                <button onclick="setTool('large_search')">Large Search</button>
-                <button onclick="setTool('ruler')">Ruler</button>
-                <button onclick="setTool('line')">Line</button>
-                <button onclick="undo()">Undo</button>
-                <button onclick="setTool('select')">Select Unit</button>
-            </div>
             <div>
                 <button onclick="interactWithGemini()">Talk to Find Risk</button>
                 <textarea id="responseArea" readonly></textarea>
@@ -94,6 +116,9 @@
             <div>
                 <button onclick="setLastKnownPosition()">Set Last Known Position</button>
             </div>
+            <div>
+                <button onclick="toggleOpponentPosition()">Show Opponent's Position</button>
+            </div>
             <div id="chatSection">
                 <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
                 <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
@@ -107,7 +132,8 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         let currentTool = null;
-        let units = [];
+        let blueUnits = [];
+        let redUnits = [];
         let circles = [];
         let lines = [];
         let rulerStart = null;
@@ -117,14 +143,16 @@
         let draggingUnit = null;
         let dragStart = null;
         let showSearchAreas = true;
+        let showOpponent = false;
         let lastKnownPosition = { x: 500, y: 600 };
         let turnCount = 1;
         let currentPlayer = 'PLA';
+        let currentRoom = 'none';
         let searchNum = 0;
 
         // 定義地圖和搜索區域
         const mapImage = new Image();
-        mapImage.src = 'Taiwan.png'; // 替換為你的地圖圖片路徑
+        mapImage.src = 'Taiwan.png';
         const GRID_ROWS = 4;
         const GRID_COLS = 6;
         const GRID_START_X = 100;
@@ -157,12 +185,55 @@
             return probs.map(val => val / total);
         }
 
+        // 更新房間選擇
+        function updateRoom() {
+            currentRoom = document.getElementById('roomSelect').value;
+            const plaNavyBtn = document.getElementById('plaNavyBtn');
+            const plaPlaneBtn = document.getElementById('plaPlaneBtn');
+            const twnNavyBtn = document.getElementById('twnNavyBtn');
+            const twnPlaneBtn = document.getElementById('twnPlaneBtn');
+
+            if (currentRoom === 'blue') {
+                plaNavyBtn.disabled = true;
+                plaPlaneBtn.disabled = true;
+                twnNavyBtn.disabled = false;
+                twnPlaneBtn.disabled = false;
+                plaNavyBtn.classList.add('disabled');
+                plaPlaneBtn.classList.add('disabled');
+                twnNavyBtn.classList.remove('disabled');
+                twnPlaneBtn.classList.remove('disabled');
+            } else if (currentRoom === 'red') {
+                plaNavyBtn.disabled = false;
+                plaPlaneBtn.disabled = false;
+                twnNavyBtn.disabled = true;
+                twnPlaneBtn.disabled = true;
+                plaNavyBtn.classList.remove('disabled');
+                plaPlaneBtn.classList.remove('disabled');
+                twnNavyBtn.classList.add('disabled');
+                twnPlaneBtn.classList.add('disabled');
+            } else {
+                plaNavyBtn.disabled = true;
+                plaPlaneBtn.disabled = true;
+                twnNavyBtn.disabled = true;
+                twnPlaneBtn.disabled = true;
+                plaNavyBtn.classList.add('disabled');
+                plaPlaneBtn.classList.add('disabled');
+                twnNavyBtn.classList.add('disabled');
+                twnPlaneBtn.classList.add('disabled');
+            }
+        }
+
+        // 切換顯示對方態勢
+        function toggleOpponentPosition() {
+            showOpponent = !showOpponent;
+            draw();
+        }
+
         // 繪製地圖和單位
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
 
-            // 繪製搜索區域
             if (showSearchAreas) {
                 SEARCH_AREAS.forEach((area, i) => {
                     const prob = probabilities[i];
@@ -178,8 +249,8 @@
                 });
             }
 
-            // 繪製單位
-            units.forEach(unit => {
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            myUnits.forEach(unit => {
                 ctx.beginPath();
                 ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
                 ctx.strokeStyle = unit.color;
@@ -203,7 +274,21 @@
                 }
             });
 
-            // 繪製搜索圓形
+            if (showOpponent) {
+                const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
+                opponentUnits.forEach(unit => {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = unit.color;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5;
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1.0;
+                });
+            }
+
             circles.forEach(circle => {
                 ctx.beginPath();
                 ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
@@ -212,7 +297,6 @@
                 ctx.stroke();
             });
 
-            // 繪製線條
             lines.forEach(line => {
                 ctx.beginPath();
                 ctx.moveTo(line.startX, line.startY);
@@ -222,7 +306,6 @@
                 ctx.stroke();
             });
 
-            // 繪製標尺
             if (rulerStart && rulerEnd) {
                 ctx.beginPath();
                 ctx.moveTo(rulerStart.x, rulerStart.y);
@@ -240,7 +323,6 @@
                 ctx.fillText(`${distance.toFixed(2)} ''`, midX, midY);
             }
 
-            // 繪製最後已知位置
             ctx.fillStyle = 'red';
             ctx.font = '16px Arial';
             ctx.fillText('+', lastKnownPosition.x, lastKnownPosition.y);
@@ -251,8 +333,11 @@
             return (Math.sqrt(Math.pow(start.x - end.x, 2) + Math.pow(start.y - end.y, 2)) - 5) / 10;
         }
 
-        // 設置工具
         function setTool(tool) {
+            if (currentRoom === 'none' && tool !== 'delete' && tool !== 'select') {
+                alert('Please select a room first!');
+                return;
+            }
             currentTool = tool;
             rulerStart = null;
             rulerEnd = null;
@@ -260,7 +345,6 @@
             lineEnd = null;
         }
 
-        // 撤銷操作
         function undo() {
             if (lines.length > 0) {
                 lines.pop();
@@ -270,18 +354,15 @@
             draw();
         }
 
-        // 切換搜索區域顯示
         function toggleSearchAreas() {
             showSearchAreas = !showSearchAreas;
             draw();
         }
 
-        // 設置最後已知位置
         function setLastKnownPosition() {
             setTool('last_known');
         }
 
-        // 結束回合
         function endTurn() {
             if (currentPlayer === 'PLA') {
                 currentPlayer = 'TAIWAN';
@@ -293,11 +374,10 @@
             draw();
         }
 
-        // 與後端交互
         async function interactWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             try {
-                const response = await fetch('https://wargame-1087471739366.us-central1.run.app', {
+                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/find_risk', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -311,12 +391,11 @@
             }
         }
 
-        // 自由聊天
         async function chatWithGemini() {
             const canvasData = canvas.toDataURL('image/png');
             const userInput = document.getElementById('chatInput').value;
             try {
-                const response = await fetch('https://wargame-1087471739366.us-central1.run.app', {
+                const response = await fetch('https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -331,7 +410,6 @@
             }
         }
 
-        // 貝葉斯搜索（模擬）
         function runBayesSearch() {
             const choice = document.getElementById('bayesInput').value;
             let output = '';
@@ -339,8 +417,8 @@
                 window.location.reload();
             } else if (/^\d+$/.test(choice) && parseInt(choice) >= 1 && parseInt(choice) <= SEARCH_AREAS.length) {
                 searchNum++;
-                output = `Search ${searchNum} Results: Not Found\n`; // 模擬結果
-                probabilities = probabilities.map(p => p * 0.9); // 模擬更新概率
+                output = `Search ${searchNum} Results: Not Found\n`;
+                probabilities = probabilities.map(p => p * 0.9);
                 const total = probabilities.reduce((sum, val) => sum + val, 0);
                 probabilities = probabilities.map(val => p / total);
                 draw();
@@ -350,19 +428,26 @@
             document.getElementById('bayesOutput').value = output;
         }
 
-        // 滑鼠事件處理
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
             if (currentTool === 'select') {
-                units.forEach(unit => {
+                const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+                myUnits.forEach(unit => {
                     if (Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25) {
                         draggingUnit = unit;
                         dragStart = { x, y };
                     }
                 });
+            } else if (currentTool === 'delete') {
+                const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+                const unitIndex = myUnits.findIndex(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+                if (unitIndex !== -1) {
+                    myUnits.splice(unitIndex, 1);
+                    currentTool = null;
+                }
             } else if (currentTool === 'ruler') {
                 rulerStart = { x, y };
                 rulerEnd = null;
@@ -372,14 +457,14 @@
             } else if (currentTool === 'last_known') {
                 lastKnownPosition = { x, y };
                 currentTool = null;
-            } else if (currentTool === 'pla_navy') {
-                units.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy' });
-            } else if (currentTool === 'pla_plane') {
-                units.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane' });
-            } else if (currentTool === 'twn') {
-                units.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn' });
-            } else if (currentTool === 'twn_plane') {
-                units.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane' });
+            } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy' });
+            } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane' });
+            } else if (currentTool === 'twn' && currentRoom === 'blue') {
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn' });
+            } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane' });
             } else if (currentTool === 'small_search') {
                 circles.push({ x, y, radius: 35, color: 'yellow' });
             } else if (currentTool === 'large_search') {
@@ -440,7 +525,6 @@
             draw();
         });
 
-        // 當地圖圖片加載完成後繪製
         mapImage.onload = () => {
             draw();
         };
