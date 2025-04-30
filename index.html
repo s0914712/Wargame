@@ -158,10 +158,16 @@
         let currentRoom = 'none';
         let searchNum = 0;
 
-        const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app'; // 替換為你的 Cloud Run 端點
+        const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
-        mapImage.src = 'https://github.com/s0914712/Wargame/blob/main/Taiwan.png';
+        mapImage.src = 'https://raw.githubusercontent.com/s0914712/Wargame/main/Taiwan.png'; // 使用 GitHub 提供的圖片網址
+        mapImage.onerror = () => {
+            console.error('Failed to load map image at: ' + mapImage.src);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Failed to load map image.', 50, 50);
+        };
         const GRID_ROWS = 4;
         const GRID_COLS = 6;
         const GRID_START_X = 100;
@@ -193,7 +199,6 @@
             return probs.map(val => val / total);
         }
 
-        // 選擇房間並同步房間狀態
         async function selectRoom() {
             const room = document.getElementById('roomSelect').value;
             if (room === 'none') {
@@ -227,7 +232,6 @@
             }
         }
 
-        // 更新房間按鈕狀態
         function updateRoom() {
             const plaNavyBtn = document.getElementById('plaNavyBtn');
             const plaPlaneBtn = document.getElementById('plaPlaneBtn');
@@ -264,7 +268,6 @@
             }
         }
 
-        // 更新房間狀態顯示
         async function updateRoomStatus() {
             try {
                 const response = await fetch(`${BASE_URL}/get_room_state`);
@@ -276,7 +279,6 @@
             }
         }
 
-        // 同步單位數據
         async function syncUnits() {
             try {
                 const response = await fetch(`${BASE_URL}/get_units`);
@@ -289,7 +291,6 @@
             }
         }
 
-        // 保存單位數據
         async function saveUnits() {
             if (currentRoom === 'none') return;
             const units = currentRoom === 'blue' ? blueUnits : redUnits;
@@ -306,11 +307,9 @@
             }
         }
 
-        // 定時同步單位數據（每 5 秒）
         setInterval(syncUnits, 5000);
         setInterval(updateRoomStatus, 5000);
 
-        // 切換顯示對方態勢
         function toggleOpponentPosition() {
             showOpponent = !showOpponent;
             draw();
@@ -619,6 +618,7 @@
         });
 
         mapImage.onload = () => {
+            console.log('Map image loaded successfully');
             draw();
             syncUnits();
             updateRoomStatus();
