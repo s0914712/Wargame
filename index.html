@@ -24,6 +24,7 @@
         }
         #canvas-container {
             flex: 2;
+            position: relative; /* For positioning the context menu */
         }
         #controls {
             flex: 1;
@@ -73,6 +74,21 @@
             margin-top: 10px;
             font-size: 14px;
         }
+        #contextMenu {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+        .menu-item {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .menu-item:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -107,6 +123,11 @@
     <div id="container">
         <div id="canvas-container">
             <canvas id="gameCanvas" width="800" height="600"></canvas>
+            <div id="contextMenu">
+                <div class="menu-item" onclick="contextMenuAction('move')">Move</div>
+                <div class="menu-item" onclick="contextMenuAction('attack')">Attack</div>
+                <div class="menu-item" onclick="contextMenuAction('delete')">Delete</div>
+            </div>
         </div>
         <div id="controls">
             <div>
@@ -136,6 +157,7 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const contextMenu = document.getElementById('contextMenu');
         let currentTool = null;
         let blueUnits = [];
         let redUnits = [];
@@ -154,13 +176,17 @@
         let currentPlayer = 'PLA';
         let currentRoom = 'none';
         let searchNum = 0;
-        let isPendingChange = false; // Track if a local change is pending
+        let isPendingChange = false;
+        let selectedUnit = null; // Track the currently selected unit
+        let attackMode = false; // Track if we're in attack mode
+        const MOVE_RANGE = 80; // Movement range (same as before)
+        const ATTACK_RANGE = MOVE_RANGE * 2; // Attack range is twice the move range
 
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
-        mapImage.crossOrigin = 'anonymous'; // Required if the image is on a different domain with CORS support
-        mapImage.src = 'Taiwan.png'; // Use a local file or a CORS-enabled URL
+        mapImage.crossOrigin = 'anonymous';
+        mapImage.src = 'Taiwan.png';
         mapImage.onerror = () => {
             console.error('Failed to load map image at: ' + mapImage.src);
             ctx.fillStyle = 'white';
@@ -306,7 +332,7 @@
             const maxRetries = 3;
             let retryCount = 0;
 
-            isPendingChange = true; // Mark that a change is pending
+            isPendingChange = true;
 
             while (retryCount < maxRetries) {
                 try {
@@ -325,7 +351,7 @@
                         throw new Error(data.error);
                     }
                     console.log('Units saved successfully:', data);
-                    isPendingChange = false; // Clear pending change flag
+                    isPendingChange = false;
                     return true;
                 } catch (error) {
                     retryCount++;
@@ -335,7 +361,7 @@
                         isPendingChange = false;
                         return false;
                     }
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
         }
@@ -374,6 +400,16 @@
                 ctx.strokeStyle = unit.color;
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Highlight selected unit
+                if (unit === selectedUnit) {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, 7, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'yellow';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
                 if (unit === draggingUnit) {
                     ctx.beginPath();
                     ctx.arc(unit.x, unit.y, 7, 0, Math.PI * 2);
@@ -384,8 +420,18 @@
                     ctx.setLineDash([]);
 
                     ctx.beginPath();
-                    ctx.arc(unit.initialX, unit.initialY, 80, 0, Math.PI * 2);
+                    ctx.arc(unit.initialX, unit.initialY, MOVE_RANGE, 0, Math.PI * 2);
                     ctx.strokeStyle = 'cyan';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Show attack range if in attack mode
+                if (attackMode && unit === selectedUnit) {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, ATTACK_RANGE, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'red';
                     ctx.setLineDash([5, 5]);
                     ctx.stroke();
                     ctx.setLineDash([]);
@@ -461,6 +507,8 @@
             rulerEnd = null;
             lineStart = null;
             lineEnd = null;
+            attackMode = false; // Reset attack mode when selecting a new tool
+            draw();
         }
 
         function undo() {
@@ -553,31 +601,121 @@
             document.getElementById('bayesOutput').value = output;
         }
 
+        // Handle right-click to show context menu
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+
+            if (unit) {
+                selectedUnit = unit;
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = `${e.clientX}px`;
+                contextMenu.style.top = `${e.clientY}px`;
+                draw();
+            } else {
+                selectedUnit = null;
+                contextMenu.style.display = 'none';
+                draw();
+            }
+        });
+
+        // Hide context menu when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+                selectedUnit = null;
+                attackMode = false;
+                draw();
+            }
+        });
+
+        // Handle context menu actions
+        function contextMenuAction(action) {
+            if (!selectedUnit) return;
+
+            if (action === 'move') {
+                draggingUnit = selectedUnit;
+                currentTool = 'select';
+                attackMode = false;
+            } else if (action === 'attack') {
+                attackMode = true;
+                draw();
+                // Allow clicking within attack range to "attack" (for now, just log the action)
+                canvas.addEventListener('mousedown', handleAttack, { once: true });
+            } else if (action === 'delete') {
+                deleteUnit(selectedUnit);
+            }
+
+            contextMenu.style.display = 'none';
+        }
+
+        // Handle attack action
+        function handleAttack(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const distance = Math.sqrt(Math.pow(x - selectedUnit.x, 2) + Math.pow(y - selectedUnit.y, 2));
+            if (distance <= ATTACK_RANGE) {
+                console.log(`Unit at (${selectedUnit.x}, ${selectedUnit.y}) attacks position (${x}, ${y})`);
+                // You can add logic here to handle the attack (e.g., check for enemy units in range)
+            } else {
+                console.log('Target is out of attack range');
+            }
+
+            attackMode = false;
+            selectedUnit = null;
+            draw();
+        }
+
+        // Delete a unit
+        async function deleteUnit(unit) {
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const unitIndex = myUnits.indexOf(unit);
+            if (unitIndex !== -1) {
+                myUnits.splice(unitIndex, 1);
+                draw();
+                const success = await saveUnits();
+                if (!success) {
+                    await syncUnits();
+                }
+            }
+            selectedUnit = null;
+            currentTool = null;
+        }
+
+        // Handle keyboard input for deleting a selected unit
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' && selectedUnit) {
+                deleteUnit(selectedUnit);
+            }
+        });
+
         canvas.addEventListener('mousedown', async (e) => {
+            if (e.button === 2) return; // Ignore right-click (handled by contextmenu)
+
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
             if (currentTool === 'select') {
                 const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
-                myUnits.forEach(unit => {
-                    if (Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25) {
-                        draggingUnit = unit;
-                        dragStart = { x, y };
-                    }
-                });
+                const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+                if (unit) {
+                    draggingUnit = unit;
+                    selectedUnit = unit;
+                    dragStart = { x, y };
+                }
             } else if (currentTool === 'delete') {
                 const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
-                const unitIndex = myUnits.findIndex(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
-                if (unitIndex !== -1) {
-                    myUnits.splice(unitIndex, 1); // Remove locally first to update UI
-                    draw(); // Redraw immediately to show the unit is gone
-                    const success = await saveUnits(); // Save to backend
-                    if (!success) {
-                        // If save fails, revert the deletion
-                        await syncUnits(); // Fetch the latest units from the backend
-                    }
-                    currentTool = null;
+                const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+                if (unit) {
+                    await deleteUnit(unit);
                 }
             } else if (currentTool === 'ruler') {
                 rulerStart = { x, y };
@@ -622,13 +760,13 @@
                 let newY = draggingUnit.y + dy;
 
                 const distance = Math.sqrt(Math.pow(newX - draggingUnit.initialX, 2) + Math.pow(newY - draggingUnit.initialY, 2));
-                if (distance <= 80) {
+                if (distance <= MOVE_RANGE) {
                     draggingUnit.x = newX;
                     draggingUnit.y = newY;
                 } else {
                     const angle = Math.atan2(newY - draggingUnit.initialY, newX - draggingUnit.initialX);
-                    draggingUnit.x = draggingUnit.initialX + 80 * Math.cos(angle);
-                    draggingUnit.y = draggingUnit.initialY + 80 * Math.sin(angle);
+                    draggingUnit.x = draggingUnit.initialX + MOVE_RANGE * Math.cos(angle);
+                    draggingUnit.y = draggingUnit.initialY + MOVE_RANGE * Math.sin(angle);
                 }
                 dragStart = { x, y };
             } else if (rulerStart) {
@@ -641,6 +779,8 @@
         });
 
         canvas.addEventListener('mouseup', async (e) => {
+            if (e.button === 2) return; // Ignore right-click
+
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
