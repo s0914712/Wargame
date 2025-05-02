@@ -153,6 +153,7 @@
             <button onclick="endTurn()">End Turn</button>
         </div>
     </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -168,7 +169,7 @@
         let lineEnd = null;
         let draggingUnit = null;
         let dragStart = null;
-        let showSearchAreas = false; // default hidden
+        let showSearchAreas = true;
         let showOpponent = false;
         let lastKnownPosition = { x: 500, y: 600 };
         let turnCount = 1;
@@ -189,6 +190,7 @@
         mapImage.crossOrigin = 'anonymous';
         mapImage.src = 'Taiwan.png';
         mapImage.onerror = () => {
+            console.error('Failed to load map image at: ' + mapImage.src);
             ctx.fillStyle = 'white';
             ctx.font = '20px Arial';
             ctx.fillText('Failed to load map image.', 50, 50);
@@ -201,206 +203,677 @@
         const GRID_CELL_WIDTH = 50;
         const GRID_CELL_HEIGHT = 50;
         const SEARCH_AREAS = [];
-        for (let r = 0; r < GRID_ROWS; r++) {
-            for (let c = 0; c < GRID_COLS; c++) {
-                SEARCH_AREAS.push({
-                    x1: GRID_START_X + c * GRID_CELL_WIDTH,
-                    y1: GRID_START_Y + r * GRID_CELL_HEIGHT,
-                    x2: GRID_START_X + (c+1) * GRID_CELL_WIDTH,
-                    y2: GRID_START_Y + (r+1) * GRID_CELL_HEIGHT
-                });
+        for (let row = 0; row < GRID_ROWS; row++) {
+            for (let col = 0; col < GRID_COLS; col++) {
+                const x1 = GRID_START_X + col * GRID_CELL_WIDTH;
+                const y1 = GRID_START_Y + row * GRID_CELL_HEIGHT;
+                const x2 = x1 + GRID_CELL_WIDTH;
+                const y2 = y1 + GRID_CELL_HEIGHT;
+                SEARCH_AREAS.push({ x1, y1, x2, y2 });
             }
         }
 
         let probabilities = initializeProbabilities();
+
         function initializeProbabilities() {
             const center = GRID_COLS - 1;
             const x = Array.from({ length: GRID_COLS }, (_, i) => i);
-            const y = x.map(v => Math.exp(-Math.pow(v-center,2)/2)/Math.sqrt(2*Math.PI));
+            const y = x.map(val => Math.exp(-Math.pow(val - center, 2) / 2) / Math.sqrt(2 * Math.PI));
             let probs = [];
-            for (let i=0; i<GRID_ROWS; i++) probs.push(...y);
-            const sum = probs.reduce((a,b)=>a+b,0);
-            return probs.map(p=>p/sum);
+            for (let row = 0; row < GRID_ROWS; row++) {
+                probs.push(...y);
+            }
+            const total = probs.reduce((sum, val) => sum + val, 0);
+            return probs.map(val => val / total);
         }
 
         async function selectRoom() {
             const room = document.getElementById('roomSelect').value;
-            if (room==='none') { currentRoom='none'; updateRoom(); return; }
+            if (room === 'none') {
+                currentRoom = 'none';
+                updateRoom();
+                return;
+            }
+
             try {
-                const res = await fetch(`${BASE_URL}/select_room`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({room}) });
-                const d = await res.json();
-                if (d.error) throw new Error(d.error);
-                currentRoom=room; updateRoom(); updateRoomStatus();
-            } catch(e) { alert(e.message); document.getElementById('roomSelect').value='none'; currentRoom='none'; }
+                const response = await fetch(`${BASE_URL}/select_room`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ room }),
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                    document.getElementById('roomSelect').value = 'none';
+                    currentRoom = 'none';
+                } else {
+                    currentRoom = room;
+                    updateRoom();
+                    updateRoomStatus();
+                }
+            } catch (error) {
+                alert('Error selecting room: ' + error.message);
+                document.getElementById('roomSelect').value = 'none';
+                currentRoom = 'none';
+            }
         }
 
         function updateRoom() {
-            const pna=document.getElementById('plaNavyBtn'), ppa=document.getElementById('plaPlaneBtn');
-            const tna=document.getElementById('twnNavyBtn'), tpa=document.getElementById('twnPlaneBtn');
-            [pna,ppa,tna,tpa].forEach(b=>b.classList.add('disabled'));
-            if (currentRoom==='blue') { tna.disabled=false; tpa.disabled=false; tna.classList.remove('disabled'); tpa.classList.remove('disabled'); }
-            else if (currentRoom==='red') { pna.disabled=false; ppa.disabled=false; pna.classList.remove('disabled'); ppa.classList.remove('disabled'); }
+            const plaNavyBtn = document.getElementById('plaNavyBtn');
+            const plaPlaneBtn = document.getElementById('plaPlaneBtn');
+            const twnNavyBtn = document.getElementById('twnNavyBtn');
+            const twnPlaneBtn = document.getElementById('twnPlaneBtn');
+
+            if (currentRoom === 'blue') {
+                plaNavyBtn.disabled = true;
+                plaPlaneBtn.disabled = true;
+                twnNavyBtn.disabled = false;
+                twnPlaneBtn.disabled = false;
+                plaNavyBtn.classList.add('disabled');
+                plaPlaneBtn.classList.add('disabled');
+                twnNavyBtn.classList.remove('disabled');
+                twnPlaneBtn.classList.remove('disabled');
+            } else if (currentRoom === 'red') {
+                plaNavyBtn.disabled = false;
+                plaPlaneBtn.disabled = false;
+                twnNavyBtn.disabled = true;
+                twnPlaneBtn.disabled = true;
+                plaNavyBtn.classList.remove('disabled');
+                plaPlaneBtn.classList.remove('disabled');
+                twnNavyBtn.classList.add('disabled');
+                twnPlaneBtn.classList.add('disabled');
+            } else {
+                plaNavyBtn.disabled = true;
+                plaPlaneBtn.disabled = true;
+                twnNavyBtn.disabled = true;
+                twnPlaneBtn.disabled = true;
+                plaNavyBtn.classList.add('disabled');
+                plaPlaneBtn.classList.add('disabled');
+                twnNavyBtn.classList.add('disabled');
+                twnPlaneBtn.classList.add('disabled');
+            }
         }
 
         async function updateRoomStatus() {
             try {
-                const res=await fetch(`${BASE_URL}/get_room_state`);
-                const d=await res.json();
-                document.getElementById('blueIp').textContent=d.room_state.blue_ip||'Not joined';
-                document.getElementById('redIp').textContent=d.room_state.red_ip||'Not joined';
-            } catch{} }
+                const response = await fetch(`${BASE_URL}/get_room_state`);
+                const data = await response.json();
+                document.getElementById('blueIp').textContent = data.room_state.blue_ip || 'Not joined';
+                document.getElementById('redIp').textContent = data.room_state.red_ip || 'Not joined';
+            } catch (error) {
+                console.error('Error updating room status:', error);
+            }
+        }
 
         async function syncUnits() {
-            if (isPendingChange) return;
-            try { const res=await fetch(`${BASE_URL}/get_units`); const d=await res.json(); blueUnits=d.blueUnits||[]; redUnits=d.redUnits||[]; draw(); } catch{}
+            if (isPendingChange) {
+                console.log('Skipping syncUnits due to pending change');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/get_units`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch units: ${response.statusText}`);
+                }
+                const data = await response.json();
+                blueUnits = data.blueUnits || [];
+                redUnits = data.redUnits || [];
+                draw();
+            } catch (error) {
+                console.error('Error syncing units:', error);
+            }
         }
+
         async function saveUnits() {
-            if(currentRoom==='none')return;
-            isPendingChange=true; let retries=0;
-            while(retries<3){
-                try{
-                    const units=currentRoom==='blue'?blueUnits:redUnits;
-                    const res=await fetch(`${BASE_URL}/save_units`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,units})});
-                    const d=await res.json(); if(d.error) throw new Error(d.error);
-                    isPendingChange=false; return;
-                }catch{retries++; await new Promise(r=>setTimeout(r,500));}
-            }
-            alert('Save units failed'); isPendingChange=false;
-        }
+            if (currentRoom === 'none') return;
 
-        setInterval(syncUnits,5000);
-        setInterval(updateRoomStatus,5000);
+            const units = currentRoom === 'blue' ? blueUnits : redUnits;
+            const maxRetries = 3;
+            let retryCount = 0;
 
-        function toggleSearchAreas(){ showSearchAreas=!showSearchAreas; draw(); }
-        function toggleOpponentPosition(){ showOpponent=!showOpponent; draw(); }
-        function setLastKnownPosition(){ currentTool='last_known'; }
-        function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); }
+            isPendingChange = true;
 
-        function calculateDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}        
-
-        function draw(){
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.drawImage(mapImage,0,0,canvas.width,canvas.height);
-            if(showSearchAreas) SEARCH_AREAS.forEach((area,i)=>{
-                const p=probabilities[i], cv=Math.round(255*(1-2*p));
-                ctx.fillStyle=`rgba(${255*0.7+cv*0.3},${255*0.7+cv*0.3},${255*0.7+255*0.3},0.7)`;
-                ctx.strokeStyle='black'; ctx.fillRect(area.x1,area.y1,area.x2-area.x1,area.y2-area.y1); ctx.strokeRect(area.x1,area.y1,area.x2-area.x1,area.y2-area.y1);
-                ctx.fillStyle=p<0.5?'black':'white'; ctx.font='12px Arial'; ctx.fillText(`${i+1} (${p.toFixed(2)})`,area.x1+3,area.y1+15);
-            });
-            const myUnits=currentRoom==='blue'?blueUnits:redUnits;
-            const oppUnits=currentRoom==='blue'?redUnits:blueUnits;
-            const visibleOpp=[];
-            oppUnits.forEach(u=>{
-                let vis=false;
-                myUnits.forEach(mu=>{if(calculateDistance(mu,u)<=((mu.type&&mu.type.includes('plane'))?PLANE_SURVEILLANCE_RADIUS:NAVY_SURVEILLANCE_RADIUS)) vis=true;});
-                if(vis||showOpponent) visibleOpp.push(u);
-            });
-            myUnits.concat(visibleOpp).forEach(u=>{
-                ctx.beginPath(); ctx.arc(u.x,u.y,5,0,2*Math.PI); ctx.strokeStyle=u.color; ctx.lineWidth=2; if(visibleOpp.includes(u)){ctx.globalAlpha=0.5;ctx.setLineDash([5,5]);} ctx.stroke(); ctx.globalAlpha=1; ctx.setLineDash([]);
-                if(u===selectedUnit){ctx.beginPath();ctx.arc(u.x,u.y,7,0,2*Math.PI);ctx.strokeStyle='yellow';ctx.lineWidth=1;ctx.stroke();}
-                if(attackMode&&u===selectedUnit){ctx.beginPath();ctx.arc(u.x,u.y,ATTACK_RANGE,0,2*Math.PI);ctx.strokeStyle='red';ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);}                
-            });
-            circles.forEach(c=>{ctx.beginPath();ctx.arc(c.x,c.y,c.radius,0,2*Math.PI);ctx.strokeStyle=c.color;ctx.lineWidth=2;ctx.stroke();});
-            lines.forEach(l=>{ctx.beginPath();ctx.moveTo(l.startX,l.startY);ctx.lineTo(l.endX,l.endY);ctx.strokeStyle='red';ctx.lineWidth=2;ctx.stroke();});
-            if(rulerStart&&rulerEnd){ctx.beginPath();ctx.moveTo(rulerStart.x,rulerStart.y);ctx.lineTo(rulerEnd.x,rulerEnd.y);ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
-                const d=(calculateDistance(rulerStart,rulerEnd)-5)/10;ctx.fillStyle='black';ctx.fillText(`${d.toFixed(2)} ''`,(rulerStart.x+rulerEnd.x)/2,(rulerStart.y+rulerEnd.y)/2);
-            }
-            ctx.fillStyle='red';ctx.font='16px Arial';ctx.fillText('+',lastKnownPosition.x,lastKnownPosition.y);ctx.fillText('+ = Last Known Position',lastKnownPosition.x+20,lastKnownPosition.y);
-        }
-
-        function setTool(tool){
-            if(currentRoom==='none'&&tool!=='delete'&&tool!=='select'){alert('Please select a room first!');return;}
-            currentTool=tool;rulerStart=lineStart=lineEnd=rulerEnd=null;attackMode=false;draw();
-        }
-        function undo(){if(lines.length)lines.pop(); else if(circles.length)circles.pop();draw();saveUnits();}
-
-        function contextMenuAction(action){
-            contextMenu.style.display='none';
-            if(!selectedUnit) return;
-            if(action==='move'){draggingUnit=selectedUnit;currentTool='select';attackMode=false;}
-            else if(action==='attack'){attackMode=true;draw();canvas.addEventListener('click', performAttack, {once:true});}
-            else if(action==='delete'){deleteUnit(selectedUnit);}
-        }
-
-        function performAttack(e){
-            const rect=canvas.getBoundingClientRect();
-            const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            const oppList=currentRoom==='blue'?redUnits:blueUnits;
-            for(let i=oppList.length-1;i>=0;i--){
-                const u=oppList[i];
-                if(calculateDistance({x:selectedUnit.x,y:selectedUnit.y},u)<=ATTACK_RANGE && Math.hypot(x-u.x,y-u.y)<=5){
-                    oppList.splice(i,1); break;
+            while (retryCount < maxRetries) {
+                try {
+                    const response = await fetch(`${BASE_URL}/save_units`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ room: currentRoom, units }),
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Failed to save units: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    console.log('Units saved successfully:', data);
+                    isPendingChange = false;
+                    return true;
+                } catch (error) {
+                    retryCount++;
+                    console.error(`Error saving units (attempt ${retryCount}/${maxRetries}):`, error);
+                    if (retryCount === maxRetries) {
+                        alert('Failed to save units after multiple attempts. Please try again.');
+                        isPendingChange = false;
+                        return false;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            attackMode=false;selectedUnit=null;saveUnits();draw();
         }
 
-        canvas.addEventListener('contextmenu',e=>{
+        setInterval(syncUnits, 5000);
+        setInterval(updateRoomStatus, 5000);
+
+        function toggleOpponentPosition() {
+            showOpponent = !showOpponent;
+            draw();
+        }
+
+        function calculateDistance(point1, point2) {
+            return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+
+            if (showSearchAreas) {
+                SEARCH_AREAS.forEach((area, i) => {
+                    const prob = probabilities[i];
+                    const colorValue = Math.round(255 * (1 - 2 * prob));
+                    ctx.fillStyle = `rgba(${255 * 0.7 + colorValue * 0.3}, ${255 * 0.7 + colorValue * 0.3}, ${255 * 0.7 + 255 * 0.3}, 0.7)`;
+                    ctx.strokeStyle = 'black';
+                    ctx.fillRect(area.x1, area.y1, area.x2 - area.x1, area.y2 - area.y1);
+                    ctx.strokeRect(area.x1, area.y1, area.x2 - area.x1, area.y2 - area.y1);
+
+                    ctx.fillStyle = prob < 0.5 ? 'black' : 'white';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(`${i + 1} (${prob.toFixed(2)})`, area.x1 + 3, area.y1 + 15);
+                });
+            }
+
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
+
+            // Calculate which opponent units are visible based on surveillance
+            const visibleOpponentUnits = [];
+            const attackableOpponentUnits = []; // Units within attack range
+            opponentUnits.forEach(opponent => {
+                let isVisible = false;
+                let isAttackable = false;
+                myUnits.forEach(myUnit => {
+                    const distance = calculateDistance(myUnit, opponent);
+                    const surveillanceRadius = (myUnit.type === 'pla_plane' || myUnit.type === 'twn_plane') ? PLANE_SURVEILLANCE_RADIUS : NAVY_SURVEILLANCE_RADIUS;
+                    if (distance <= surveillanceRadius) {
+                        isVisible = true;
+                    }
+                    // Check if the opponent is within attack range of the selected unit
+                    if (attackMode && myUnit === selectedUnit && distance <= ATTACK_RANGE) {
+                        isAttackable = true;
+                    }
+                });
+                if (isVisible || showOpponent) {
+                    visibleOpponentUnits.push(opponent);
+                    if (isAttackable) {
+                        attackableOpponentUnits.push(opponent);
+                    }
+                }
+            });
+
+            // Draw my units
+            myUnits.forEach(unit => {
+                ctx.beginPath();
+                ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
+                ctx.strokeStyle = unit.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Highlight selected unit
+                if (unit === selectedUnit) {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, 7, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'yellow';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                if (unit === draggingUnit) {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, 7, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.beginPath();
+                    ctx.arc(unit.initialX, unit.initialY, MOVE_RANGE, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'cyan';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Show attack range if in attack mode
+                if (attackMode && unit === selectedUnit) {
+                    ctx.beginPath();
+                    ctx.arc(unit.x, unit.y, ATTACK_RANGE, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'red';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            // Draw visible opponent units
+            visibleOpponentUnits.forEach(unit => {
+                ctx.beginPath();
+                ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
+                if (attackableOpponentUnits.includes(unit)) {
+                    // Highlight attackable units as solid (filled) circles
+                    ctx.fillStyle = unit.color;
+                    ctx.fill();
+                    ctx.strokeStyle = unit.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                } else {
+                    // Non-attackable units remain semi-transparent with dashed lines
+                    ctx.strokeStyle = unit.color;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5;
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1.0;
+                }
+            });
+
+            circles.forEach(circle => {
+                ctx.beginPath();
+                ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = circle.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+
+            lines.forEach(line => {
+                ctx.beginPath();
+                ctx.moveTo(line.startX, line.startY);
+                ctx.lineTo(line.endX, line.endY);
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+
+            if (rulerStart && rulerEnd) {
+                ctx.beginPath();
+                ctx.moveTo(rulerStart.x, rulerStart.y);
+                ctx.lineTo(rulerEnd.x, rulerEnd.y);
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                const distance = (calculateDistance(rulerStart, rulerEnd) - 5) / 10;
+                const midX = (rulerStart.x + rulerEnd.x) / 2;
+                const midY = (rulerStart.y + rulerEnd.y) / 2;
+                ctx.fillStyle = 'black';
+                ctx.fillText(`${distance.toFixed(2)} ''`, midX, midY);
+            }
+
+            ctx.fillStyle = 'red';
+            ctx.font = '16px Arial';
+            ctx.fillText('+', lastKnownPosition.x, lastKnownPosition.y);
+            ctx.fillText('+ = Last Known Position', lastKnownPosition.x + 20, lastKnownPosition.y);
+        }
+
+        function setTool(tool) {
+            if (currentRoom === 'none' && tool !== 'delete' && tool !== 'select') {
+                alert('Please select a room first!');
+                return;
+            }
+            currentTool = tool;
+            rulerStart = null;
+            rulerEnd = null;
+            lineStart = null;
+            lineEnd = null;
+            attackMode = false;
+            draw();
+        }
+
+        function undo() {
+            if (lines.length > 0) {
+                lines.pop();
+            } else if (circles.length > 0) {
+                circles.pop();
+            }
+            draw();
+            saveUnits();
+        }
+
+        function toggleSearchAreas() {
+            showSearchAreas = !showSearchAreas;
+            draw();
+        }
+
+        function setLastKnownPosition() {
+            setTool('last_known');
+        }
+
+        function endTurn() {
+            if (currentPlayer === 'PLA') {
+                currentPlayer = 'TAIWAN';
+            } else {
+                currentPlayer = 'PLA';
+                turnCount++;
+            }
+            document.getElementById('turnInfo').textContent = `Turn ${turnCount}: ${currentPlayer}'s turn`;
+            draw();
+        }
+
+        async function chatWithGemini() {
+            const userInput = document.getElementById('chatInput').value;
+            if (!userInput) {
+                document.getElementById('chatOutput').value += '\nError: Please enter a message.\n';
+                return;
+            }
+
+            let canvasData = null;
+            try {
+                canvasData = canvas.toDataURL('image/png');
+            } catch (error) {
+                console.error('Failed to export canvas:', error);
+                document.getElementById('chatOutput').value += `\nError: Failed to export canvas - ${error.message}\n`;
+            }
+
+            try {
+                console.log('Sending request to /chat with input:', userInput);
+                const body = { message: userInput };
+                if (canvasData) {
+                    body.image = canvasData;
+                }
+                const response = await fetch(`${BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body),
+                });
+                const data = await response.json();
+                console.log('Response from /chat:', data);
+                if (data.error) {
+                    document.getElementById('chatOutput').value += `\nError: ${data.error}\n`;
+                } else {
+                    document.getElementById('chatOutput').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
+                }
+                document.getElementById('chatInput').value = '';
+            } catch (error) {
+                console.error('Error in chatWithGemini:', error);
+                document.getElementById('chatOutput').value += `\nError: ${error.message}\n`;
+            }
+        }
+
+        function runBayesSearch() {
+            const choice = document.getElementById('bayesInput').value;
+            let output = '';
+            if (choice === '0') {
+                window.location.reload();
+            } else if (/^\d+$/.test(choice) && parseInt(choice) >= 1 && parseInt(choice) <= SEARCH_AREAS.length) {
+                searchNum++;
+                output = `Search ${searchNum} Results: Not Found\n`;
+                probabilities = probabilities.map(p => p * 0.9);
+                const total = probabilities.reduce((sum, val) => sum + val, 0);
+                probabilities = probabilities.map(val => p / total);
+                draw();
+            } else {
+                output = 'INVALID INPUT\n';
+            }
+            document.getElementById('bayesOutput').value = output;
+        }
+
+        // Handle right-click to show context menu
+        canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            const rect=canvas.getBoundingClientRect();
-            const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            const myList=currentRoom==='blue'?blueUnits:redUnits;
-            const unit=myList.find(u=>Math.hypot(x-u.x,y-u.y)<=5);
-            if(unit){
-                selectedUnit=unit;
-                const contRect=document.getElementById('canvas-container').getBoundingClientRect();
-                contextMenu.style.left=`${e.clientX-contRect.left}px`;
-                contextMenu.style.top=`${e.clientY-contRect.top}px`;
-                contextMenu.style.display='block'; draw();
-            } else {selectedUnit=null;contextMenu.style.display='none';draw();}
-        });
-        document.addEventListener('click',e=>{if(!contextMenu.contains(e.target)){contextMenu.style.display='none';selectedUnit=null;attackMode=false;draw();}});
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-        async function deleteUnit(u){
-            const list=currentRoom==='blue'?blueUnits:redUnits;
-            const idx=list.indexOf(u); if(idx!==-1){list.splice(idx,1);draw();await saveUnits();}
-            selectedUnit=null;currentTool=null;
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+
+            if (unit) {
+                selectedUnit = unit;
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = `${e.clientX}px`;
+                contextMenu.style.top = `${e.clientY}px`;
+                draw();
+            } else {
+                selectedUnit = null;
+                contextMenu.style.display = 'none';
+                draw();
+            }
+        });
+
+        // Hide context menu when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+                selectedUnit = null;
+                attackMode = false;
+                draw();
+            }
+        });
+
+        // Handle context menu actions
+        function contextMenuAction(action) {
+            if (!selectedUnit) return;
+
+            if (action === 'move') {
+                draggingUnit = selectedUnit;
+                currentTool = 'select';
+                attackMode = false;
+            } else if (action === 'attack') {
+                attackMode = true;
+                draw();
+                // Wait for the user to click an attackable target
+                canvas.addEventListener('mousedown', handleAttack, { once: true });
+            } else if (action === 'delete') {
+                deleteUnit(selectedUnit);
+            }
+
+            contextMenu.style.display = 'none';
         }
 
-        document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selectedUnit){deleteUnit(selectedUnit);}});
+        // Handle attack action
+        async function handleAttack(e) {
+            if (e.button === 2) {
+                attackMode = false;
+                selectedUnit = null;
+                draw();
+                return;
+            }
 
-        canvas.addEventListener('mousedown',async e=>{
-            if(e.button===2)return;
-            const rect=canvas.getBoundingClientRect();
-            const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            if(currentTool==='select'){
-                const myList=currentRoom==='blue'?blueUnits:redUnits;
-                const u=myList.find(u=>Math.hypot(x-u.x,y-u.y)<=5);
-                if(u){draggingUnit=u;selectedUnit=u;dragStart={x,y};}
-            } else if(currentTool==='delete'){
-                const myList=currentRoom==='blue'?blueUnits:redUnits;
-                const u=myList.find(u=>Math.hypot(x-u.x,y-u.y)<=5); if(u) await deleteUnit(u);
-            } else if(currentTool==='ruler'){rulerStart={x,y};rulerEnd=null;} 
-            else if(currentTool==='line'){lineStart={x,y};lineEnd=null;} 
-            else if(currentTool==='last_known'){lastKnownPosition={x,y};currentTool=null;}
-            else if(currentTool==='pla_navy'&&currentRoom==='red'){redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'});saveUnits();}
-            else if(currentTool==='pla_plane'&&currentRoom==='red'){redUnits.push({x,y,initialX:x,initialY:y,color:'rgb(255,150,150)',type:'pla_plane'});saveUnits();}
-            else if(currentTool==='twn'&&currentRoom==='blue'){blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'});saveUnits();}
-            else if(currentTool==='twn_plane'&&currentRoom==='blue'){blueUnits.push({x,y,initialX:x,initialY:y,color:'rgb(150,150,255)',type:'twn_plane'});saveUnits();}
-            else if(currentTool==='small_search'){circles.push({x,y,radius:35,color:'yellow'});} 
-            else if(currentTool==='large_search'){circles.push({x,y,radius:50,color:'yellow'});}
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
+
+            // Find the closest visible opponent unit to the click
+            const targetUnit = opponentUnits.find(unit => {
+                const distanceToClick = calculateDistance({ x, y }, unit);
+                const distanceToAttacker = calculateDistance(selectedUnit, unit);
+                const isVisible = visibleOpponentUnits.includes(unit); // Ensure the unit is visible
+                return distanceToClick <= 25 && distanceToAttacker <= ATTACK_RANGE && isVisible;
+            });
+
+            if (targetUnit) {
+                console.log(`Unit at (${selectedUnit.x}, ${selectedUnit.y}) attacks unit at (${targetUnit.x}, ${targetUnit.y})`);
+                // Remove the target unit (simulate destruction)
+                const targetIndex = opponentUnits.indexOf(targetUnit);
+                if (targetIndex !== -1) {
+                    opponentUnits.splice(targetIndex, 1);
+                    // Save the updated opponent units to the backend
+                    const opponentRoom = currentRoom === 'blue' ? 'red' : 'blue';
+                    const tempRoom = currentRoom;
+                    currentRoom = opponentRoom; // Temporarily switch to opponent's room to save their units
+                    const success = await saveUnits();
+                    if (!success) {
+                        await syncUnits();
+                    }
+                    currentRoom = tempRoom; // Switch back to the original room
+                }
+            } else {
+                console.log('No valid target selected or target is out of attack range');
+            }
+
+            attackMode = false;
+            selectedUnit = null;
+            draw();
+        }
+
+        // Delete a unit
+        async function deleteUnit(unit) {
+            const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+            const unitIndex = myUnits.indexOf(unit);
+            if (unitIndex !== -1) {
+                myUnits.splice(unitIndex, 1);
+                draw();
+                const success = await saveUnits();
+                if (!success) {
+                    await syncUnits();
+                }
+            }
+            selectedUnit = null;
+            currentTool = null;
+        }
+
+        // Handle keyboard input for deleting a selected unit
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' && selectedUnit) {
+                deleteUnit(selectedUnit);
+            }
+        });
+
+        canvas.addEventListener('mousedown', async (e) => {
+            if (e.button === 2) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentTool === 'select') {
+                const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+                const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+                if (unit) {
+                    draggingUnit = unit;
+                    selectedUnit = unit;
+                    dragStart = { x, y };
+                }
+            } else if (currentTool === 'delete') {
+                const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
+                const unit = myUnits.find(unit => Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2) <= 25);
+                if (unit) {
+                    await deleteUnit(unit);
+                }
+            } else if (currentTool === 'ruler') {
+                rulerStart = { x, y };
+                rulerEnd = null;
+            } else if (currentTool === 'line') {
+                lineStart = { x, y };
+                lineEnd = null;
+            } else if (currentTool === 'last_known') {
+                lastKnownPosition = { x, y };
+                currentTool = null;
+            } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
+                saveUnits();
+            } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
+                redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
+                saveUnits();
+            } else if (currentTool === 'twn' && currentRoom === 'blue') {
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
+                saveUnits();
+            } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
+                blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
+                saveUnits();
+            } else if (currentTool === 'small_search') {
+                circles.push({ x, y, radius: 35, color: 'yellow' });
+            } else if (currentTool === 'large_search') {
+                circles.push({ x, y, radius: 50, color: 'yellow' });
+            }
+
             draw();
         });
 
-        canvas.addEventListener('mousemove',e=>{
-            if(!draggingUnit&&!rulerStart&&!lineStart)return;
-            const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy;
-                const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY);
-                if(d>MOVE_RANGE){const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);}                
-                draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y};
-            } else if(rulerStart){rulerEnd={x,y};} else if(lineStart){lineEnd={x,y};} draw();
-        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (!draggingUnit && !rulerStart && !lineStart) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-        canvas.addEventListener('mouseup',async e=>{
-            if(e.button===2)return;
-            if(draggingUnit){draggingUnit=null;dragStart=null;await saveUnits();}
-            else if(rulerStart){rulerEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top};}
-            else if(lineStart){lineEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top};lines.push({startX:lineStart.x,startY:lineStart.y,endX:lineEnd.x,endY:lineEnd.y});lineStart=lineEnd=null;}
+            if (draggingUnit) {
+                const dx = x - dragStart.x;
+                const dy = y - dragStart.y;
+                let newX = draggingUnit.x + dx;
+                let newY = draggingUnit.y + dy;
+
+                const distance = calculateDistance({ x: newX, y: newY }, { x: draggingUnit.initialX, y: draggingUnit.initialY });
+                if (distance <= MOVE_RANGE) {
+                    draggingUnit.x = newX;
+                    draggingUnit.y = newY;
+                } else {
+                    const angle = Math.atan2(newY - draggingUnit.initialY, newX - draggingUnit.initialX);
+                    draggingUnit.x = draggingUnit.initialX + MOVE_RANGE * Math.cos(angle);
+                    draggingUnit.y = draggingUnit.initialY + MOVE_RANGE * Math.sin(angle);
+                }
+                dragStart = { x, y };
+            } else if (rulerStart) {
+                rulerEnd = { x, y };
+            } else if (lineStart) {
+                lineEnd = { x, y };
+            }
+
             draw();
         });
 
-        mapImage.onload=()=>{draw();syncUnits();updateRoomStatus();};
+        canvas.addEventListener('mouseup', async (e) => {
+            if (e.button === 2) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (draggingUnit) {
+                draggingUnit = null;
+                dragStart = null;
+                await saveUnits();
+            } else if (rulerStart) {
+                rulerEnd = { x, y };
+            } else if (lineStart) {
+                lineEnd = { x, y };
+                lines.push({ startX: lineStart.x, startY: lineStart.y, endX: lineEnd.x, endY: lineEnd.y });
+                lineStart = null;
+                lineEnd = null;
+            }
+
+            draw();
+        });
+
+        mapImage.onload = () => {
+            console.log('Map image loaded successfully');
+            draw();
+            syncUnits();
+            updateRoomStatus();
+        };
     </script>
 </body>
 </html>
