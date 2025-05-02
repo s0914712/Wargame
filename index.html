@@ -101,9 +101,17 @@
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
-        mapImage.crossOrigin = 'anonymous';
-        mapImage.src = 'Taiwan.png';
-        mapImage.onerror = () => { ctx.fillStyle = 'white'; ctx.font = '20px Arial'; ctx.fillText('Failed to load map image.', 50, 50); };
+        mapImage.src = './Taiwan.png'; // Use relative path
+        mapImage.onerror = () => { 
+            console.error('Failed to load map image. Check path or CORS settings.');
+            ctx.fillStyle = 'white'; 
+            ctx.font = '20px Arial'; 
+            ctx.fillText('Failed to load map image. Please check console.', 50, 50); 
+            // Fallback to a solid color background
+            ctx.fillStyle = '#87CEEB'; // Light blue as fallback
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            draw(); // Redraw to ensure other elements are visible
+        };
 
         const GRID_ROWS = 4, GRID_COLS = 6, GRID_START_X = 100, GRID_START_Y = 300, CELL_W = 50, CELL_H = 50;
         const SEARCH_AREAS = [];
