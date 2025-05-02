@@ -66,8 +66,8 @@
     #bayesOutput,
     #chatOutput {
       width: 100%;
-      min-height: 120px;
-      max-height: 300px;
+      min-height: 200px;
+      max-height: 400px;
       overflow-y: auto;
       resize: vertical;
     }
@@ -173,24 +173,28 @@
             </div>
             <div id="attackMenu"></div>
         </div>
-        <div id="controls">
-            <div><button onclick="toggleSearchAreas()">Display Search Plan</button></div>
-            <div>
-                <input id="bayesInput" type="text" placeholder="Enter search area number">
-                <button onclick="runBayesSearch()">Bayes Search</button>
-                <textarea id="bayesOutput" readonly></textarea>
-            </div>
-            <div><button onclick="setLastKnownPosition()">Set Last Known Position</button></div>
-            <div><button onclick="toggleOpponentPosition()">Show Opponent's Position</button></div>
-            <div id="chatSection">
-                <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
-                <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
-                <textarea id="responseArea" readonly></textarea>
+<div id="controls">
+    <!-- Gemini chat section moved to top -->
+    <div id="chatSection">
+        <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
+        <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
+        <textarea id="responseArea" readonly style="min-height: 200px; max-height: 400px; overflow-y: auto;"></textarea>
+    </div>
 
-            </div>
-            <div id="turnInfo">Turn 1: PLA's turn</div>
-            <button onclick="endTurn()">End Turn</button>
-        </div>
+    <div><button onclick="toggleSearchAreas()">Display Search Plan</button></div>
+
+    <div>
+        <input id="bayesInput" type="text" placeholder="Enter search area number">
+        <button onclick="runBayesSearch()">Bayes Search</button>
+        <textarea id="bayesOutput" readonly></textarea>
+    </div>
+
+    <div><button onclick="setLastKnownPosition()">Set Last Known Position</button></div>
+    <div><button onclick="toggleOpponentPosition()">Show Opponent's Position</button></div>
+
+    <div id="turnInfo">Turn 1: PLA's turn</div>
+    <button onclick="endTurn()">End Turn</button>
+</div>
     </div>
     <script>
         const canvas = document.getElementById('gameCanvas');
