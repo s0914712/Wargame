@@ -14,6 +14,7 @@
         button, select, input { padding: 5px; margin: 2px; }
         #bayesOutput, #chatOutput { width: 100%; height: 150px; resize: none; }
         #turnInfo { font-weight: bold; }
+        #turnTimer { color: #f00; font-weight: bold; }
         #chatSection { display: flex; flex-direction: column; gap: 5px; }
         #chatInput { width: 100%; height: 100px; resize: vertical; padding: 5px; font-size: 14px; }
         #chatButton { align-self: flex-end; }
@@ -79,7 +80,8 @@
                 <textarea id="chatOutput" readonly></textarea>
             </div>
             <div id="turnInfo">Turn 1: PLA's turn</div>
-            <button onclick="endTurn()">End Turn</button>
+            <div id="turnTimer">Time Remaining: 30s</div>
+            <button id="endTurnBtn" onclick="endTurn()">End Turn</button>
         </div>
     </div>
     <script>
@@ -91,10 +93,14 @@
             rulerStart = null, rulerEnd = null, lineStart = null, lineEnd = null,
             draggingUnit = null, dragStart = null,
             showSearchAreas = false, showOpponent = false,
-            lastKnownPosition = { x: 500, y: 600 }, turnCount = 1, currentPlayer = 'PLA', currentRoom = 'none',
-            isPendingChange = false, selectedUnit = null, attackMode = false;
+            lastKnownPosition = { x: 500, y: 600 }, turnCount = 1, 
+            currentPlayer = 'PLA', currentRoom = 'none',
+            isPendingChange = false, selectedUnit = null, attackMode = false,
+            turnTimer = null, timeRemaining = 30, isPlayerTurn = false, unitsMoved = false;
+        
         const MOVE_RANGE = 80, ATTACK_RANGE = MOVE_RANGE * 2;
         const PLANE_RADIUS = 150, NAVY_RADIUS = 50;
+        const TURN_DURATION = 30; // 30 seconds per turn
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
 
         const mapImage = new Image();
@@ -127,8 +133,13 @@
                 const res = await fetch(`${BASE_URL}/select_room`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room }) });
                 const d = await res.json(); if (d.error) throw new Error(d.error);
                 currentRoom = room; updateRoom(); updateRoomStatus();
+                
+                // Get units when joining a room
+                await syncUnits();
+                checkIfPlayerTurn();
             } catch(e) { alert(e.message); document.getElementById('roomSelect').value = 'none'; currentRoom = 'none'; }
         }
+        
         function updateRoom() {
             ['plaNavyBtn','plaPlaneBtn','twnNavyBtn','twnPlaneBtn'].forEach(id=>{
                 const b=document.getElementById(id); b.disabled=true; b.classList.add('disabled');
@@ -139,26 +150,119 @@
                 ['plaNavyBtn','plaPlaneBtn'].forEach(id=>{const b=document.getElementById(id); b.disabled=false; b.classList.remove('disabled');});
             }
         }
+        
         async function updateRoomStatus() {
-            try { const res=await fetch(`${BASE_URL}/get_room_state`); const d=await res.json();
+            try { 
+                const res=await fetch(`${BASE_URL}/get_room_state`); 
+                const d=await res.json();
                 document.getElementById('blueIp').textContent=d.room_state.blue_ip||'Not joined';
                 document.getElementById('redIp').textContent=d.room_state.red_ip||'Not joined';
-            } catch{} }
+            } catch{} 
+        }
 
         async function syncUnits() {
-            if (isPendingChange) return;
-            try { const res=await fetch(`${BASE_URL}/get_units`); const d=await res.json(); blueUnits=d.blueUnits||[]; redUnits=d.redUnits||[]; draw(); } catch{} }
+            try { 
+                const res=await fetch(`${BASE_URL}/get_units`); 
+                const d=await res.json(); 
+                blueUnits=d.blueUnits||[]; 
+                redUnits=d.redUnits||[]; 
+                draw(); 
+            } catch{}
+        }
+        
         async function saveUnits() {
             if (currentRoom==='none') return;
             isPendingChange=true; let rcount=0;
-            while(rcount<3){ try {
-                const units = currentRoom==='blue'?blueUnits:redUnits;
-                const res = await fetch(`${BASE_URL}/save_units`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room:currentRoom, units }) });
-                const d=await res.json(); if(d.error) throw new Error(d.error);
-                isPendingChange=false; return; } catch { rcount++; await new Promise(s=>setTimeout(s,500)); }}
-            alert('Failed to save units.'); isPendingChange=false;
+            while(rcount<3){ 
+                try {
+                    const units = currentRoom==='blue'?blueUnits:redUnits;
+                    const res = await fetch(`${BASE_URL}/save_units`, { 
+                        method:'POST', 
+                        headers:{'Content-Type':'application/json'}, 
+                        body:JSON.stringify({ room:currentRoom, units }) 
+                    });
+                    const d=await res.json(); 
+                    if(d.error) throw new Error(d.error);
+                    isPendingChange=false; 
+                    return true; 
+                } catch { 
+                    rcount++; 
+                    await new Promise(s=>setTimeout(s,500)); 
+                }
+            }
+            alert('Failed to save units.'); 
+            isPendingChange=false;
+            return false;
         }
-        setInterval(syncUnits,5000); setInterval(updateRoomStatus,5000);
+        
+        // Check every 5 seconds for unit updates from other player
+        setInterval(async () => {
+            if (!isPlayerTurn) {
+                await syncUnits();
+                checkIfPlayerTurn();
+            }
+        }, 5000); 
+        
+        setInterval(updateRoomStatus, 5000);
+
+        function checkIfPlayerTurn() {
+            if (currentRoom === 'none') {
+                isPlayerTurn = false;
+                return;
+            }
+            
+            if (currentRoom === 'blue' && currentPlayer === 'TAIWAN') {
+                isPlayerTurn = true;
+                startTurnTimer();
+            } else if (currentRoom === 'red' && currentPlayer === 'PLA') {
+                isPlayerTurn = true;
+                startTurnTimer();
+            } else {
+                isPlayerTurn = false;
+                clearTurnTimer();
+                document.getElementById('turnTimer').textContent = 'Waiting for opponent';
+            }
+            
+            updateEndTurnButton();
+        }
+        
+        function startTurnTimer() {
+            clearTurnTimer();
+            timeRemaining = TURN_DURATION;
+            updateTimerDisplay();
+            
+            turnTimer = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+                
+                if (timeRemaining <= 0) {
+                    clearTurnTimer();
+                    endTurn(); // Auto-end turn when time runs out
+                }
+            }, 1000);
+        }
+        
+        function clearTurnTimer() {
+            if (turnTimer) {
+                clearInterval(turnTimer);
+                turnTimer = null;
+            }
+        }
+        
+        function updateTimerDisplay() {
+            document.getElementById('turnTimer').textContent = `Time Remaining: ${timeRemaining}s`;
+            if (timeRemaining <= 10) {
+                document.getElementById('turnTimer').style.color = 'red';
+            } else {
+                document.getElementById('turnTimer').style.color = '';
+            }
+        }
+        
+        function updateEndTurnButton() {
+            const endTurnBtn = document.getElementById('endTurnBtn');
+            endTurnBtn.disabled = !isPlayerTurn;
+            endTurnBtn.classList.toggle('disabled', !isPlayerTurn);
+        }
 
         function calculateDistance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 
@@ -191,17 +295,71 @@
             }
             ctx.fillStyle='red'; ctx.font='16px Arial'; ctx.fillText('+',lastKnownPosition.x,lastKnownPosition.y); ctx.fillText('+ = Last Known Position',lastKnownPosition.x+20,lastKnownPosition.y);
         }
+        
         function drawUnit(u,isOpp){ ctx.beginPath(); ctx.arc(u.x,u.y,5,0,2*Math.PI); if(isOpp){ ctx.globalAlpha=0.5; ctx.setLineDash([5,5]); } ctx.strokeStyle=u.color; ctx.lineWidth=2; ctx.stroke(); ctx.globalAlpha=1; ctx.setLineDash([]); if(u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,8,0,2*Math.PI); ctx.strokeStyle='yellow'; ctx.lineWidth=1; ctx.stroke(); } if(attackMode&&u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,ATTACK_RANGE,0,2*Math.PI); ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]); }}
 
-        function setTool(tool){ if(currentRoom==='none'&&!['delete','select'].includes(tool)){alert('Please select a room first!');return;} currentTool=tool; rulerEnd=rulerStart=lineStart=lineEnd=null; attackMode=false; draw(); }
-        function undo(){ if(lines.length) lines.pop(); else if(circles.length) circles.pop(); draw(); saveUnits(); }
+        function setTool(tool){ 
+            if(currentRoom==='none'&&!['delete','select'].includes(tool)){
+                alert('Please select a room first!');
+                return;
+            }
+            // Prevent unit manipulation when it's not player's turn
+            if (!isPlayerTurn && ['pla_navy', 'pla_plane', 'twn', 'twn_plane', 'select', 'delete'].includes(tool)) {
+                alert("Wait for your turn to manipulate units!");
+                return;
+            }
+            
+            currentTool=tool; 
+            rulerEnd=rulerStart=lineStart=lineEnd=null; 
+            attackMode=false; 
+            draw(); 
+        }
+        
+        function undo(){ 
+            if(lines.length) lines.pop(); 
+            else if(circles.length) circles.pop(); 
+            draw(); 
+        }
+        
         function toggleSearchAreas(){ showSearchAreas=!showSearchAreas; draw(); }
         function toggleOpponentPosition(){ showOpponent=!showOpponent; draw(); }
         function setLastKnownPosition(){ currentTool='last_known'; }
-        function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); }
+        
+        async function endTurn(){
+            if (!isPlayerTurn) return;
+            
+            // Save units at end of turn
+            if (unitsMoved) {
+                const saveResult = await saveUnits();
+                if (!saveResult) {
+                    if (!confirm("Failed to save units. End turn anyway?")) {
+                        return; // Cancel end turn if save failed and user doesn't confirm
+                    }
+                }
+                unitsMoved = false;
+            }
+            
+            currentPlayer = currentPlayer === 'PLA' ? 'TAIWAN' : 'PLA';
+            if (currentPlayer === 'PLA') turnCount++;
+            document.getElementById('turnInfo').textContent = `Turn ${turnCount}: ${currentPlayer}'s turn`;
+            
+            clearTurnTimer();
+            isPlayerTurn = false;
+            updateEndTurnButton();
+            document.getElementById('turnTimer').textContent = 'Waiting for opponent';
+            
+            draw();
+        }
 
         canvas.addEventListener('contextmenu',e=>{
-            e.preventDefault(); const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
+            e.preventDefault(); 
+            
+            if (!isPlayerTurn) {
+                return; // Don't allow context menu when not player's turn
+            }
+            
+            const rect=canvas.getBoundingClientRect(); 
+            const x=e.clientX-rect.left, y=e.clientY-rect.top;
             const myList=currentRoom==='blue'?blueUnits:redUnits;
             const unit=myList.find(u=>Math.hypot(x-u.x,y-u.y)<=8);
             if(!unit){ contextMenu.style.display='none'; attackMenu.style.display='none'; selectedUnit=null; draw(); return; }
@@ -220,21 +378,74 @@
             attackMenu.style.display='none';
             contextMenu.style.display='block'; draw();
         });
+        
         document.addEventListener('click', e => {
-    // Hide menus when clicking outside both contextMenu and attackMenu
-    if (!contextMenu.contains(e.target) && !attackMenu.contains(e.target)) {
-        contextMenu.style.display = 'none';
-        attackMenu.style.display = 'none';
-        attackMode = false;
-        draw();
-    }
-});
+            // Hide menus when clicking outside both contextMenu and attackMenu
+            if (!contextMenu.contains(e.target) && !attackMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+                attackMenu.style.display = 'none';
+                attackMode = false;
+                draw();
+            }
+        });
 
-        function contextMenuAction(action){ contextMenu.style.display='none'; if(action==='move'){ draggingUnit=selectedUnit; currentTool='select'; } else if(action==='attack'){ showAttackMenu(); } else if(action==='delete'){ deleteUnit(selectedUnit); }}
+        function contextMenuAction(action){ 
+            contextMenu.style.display='none'; 
+            if(action==='move'){ 
+                draggingUnit=selectedUnit; 
+                currentTool='select'; 
+            } else if(action==='attack'){ 
+                showAttackMenu(); 
+            } else if(action==='delete'){ 
+                deleteUnit(selectedUnit); 
+            }
+        }
+        
+        function showAttackMenu() {
+            const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
+            const valid = oppList.filter(u => calculateDistance(selectedUnit, u) <= ATTACK_RANGE);
 
-        function showAttackMenu(){ const oppList=currentRoom==='blue'?redUnits:blueUnits; const valid=oppList.filter(u=>calculateDistance(selectedUnit,u)<=ATTACK_RANGE); if(!valid.length){ alert('No targets in range.'); return; } attackMenu.innerHTML=''; valid.forEach((u,i)=>{ const div=document.createElement('div'); div.className='attack-item'; div.textContent=`${i+1}. (${Math.round(u.x)},${Math.round(u.y)})`; div.onclick=()=>performAttackOnTarget(u); attackMenu.appendChild(div); }); const contRect=document.getElementById('canvas-container').getBoundingClientRect(); const cRect=canvas.getBoundingClientRect(); const x=selectedUnit.x+10, y=selectedUnit.y; attackMenu.style.left=`${cRect.left-contRect.left+x}px`; attackMenu.style.top=`${cRect.top-contRect.top+y}px`; attackMenu.style.display='block'; }
+            attackMenu.innerHTML = '';
+
+            if (valid.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'attack-item disabled';
+                div.textContent = 'No targets in range';
+                div.style.color = '#aaa';
+                attackMenu.appendChild(div);
+            } else {
+                valid.forEach((u, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'attack-item';
+                    div.textContent = `${i + 1}. (${Math.round(u.x)}, ${Math.round(u.y)})`;
+                    div.onclick = () => performAttackOnTarget(u);
+                    attackMenu.appendChild(div);
+                });
+            }
+
+            // 顯示前先設為不可見來取得尺寸
+            attackMenu.style.display = 'block';
+            attackMenu.style.visibility = 'hidden';
+
+            const contRect = document.getElementById('canvas-container').getBoundingClientRect();
+            const menuWidth = attackMenu.offsetWidth;
+            const menuHeight = attackMenu.offsetHeight;
+
+            let posX = selectedUnit.x + 10;
+            let posY = selectedUnit.y;
+
+            // 邊界限制：避免選單超出 canvas-container 邊界
+            posX = Math.min(Math.max(0, posX), canvas.width - menuWidth);
+            posY = Math.min(Math.max(0, posY), canvas.height - menuHeight);
+
+            attackMenu.style.left = `${posX}px`;
+            attackMenu.style.top = `${posY}px`;
+            attackMenu.style.visibility = 'visible';
+        }
 
         async function performAttackOnTarget(target) {
+            if (!isPlayerTurn) return;
+            
             // Remove target locally
             const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
             const idx = oppList.indexOf(target);
@@ -243,32 +454,111 @@
                 draw();
                 // Notify user
                 alert(`已攻擊座標 (${target.x.toFixed(2)}, ${target.y.toFixed(2)}) 的單位`);
+                // Mark units as moved so they'll be saved at end of turn
+                unitsMoved = true;
+                
                 // Send delete command to backend
                 try {
                     await fetch(`${BASE_URL}/delete_unit`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ x: target.x, y: target.y })
+                        body: JSON.stringify({room: currentRoom, x: target.x, y: target.y})
                     });
                 } catch (err) {
                     console.error('Error sending delete command:', err);
                 }
-                // Also save updated unit list
-                await saveUnits();
             }
             // Hide attack menu and reset selection
             attackMenu.style.display = 'none';
             selectedUnit = null;
         }
 
-        async function deleteUnit(u){ const list=currentRoom==='blue'?blueUnits:redUnits; const idx=list.indexOf(u); if(idx>-1){ list.splice(idx,1); await saveUnits(); draw(); } selectedUnit=null; }
+        async function deleteUnit(u){
+            if (!isPlayerTurn) return;
+            
+            const list=currentRoom==='blue'?blueUnits:redUnits; 
+            const idx=list.indexOf(u); 
+            if(idx>-1){ 
+                list.splice(idx,1);
+                unitsMoved = true; 
+                draw(); 
+            } 
+            selectedUnit=null; 
+        }
 
-        document.addEventListener('keydown',e=>{ if(e.key==='Delete'&&selectedUnit){ deleteUnit(selectedUnit); }});
+        document.addEventListener('keydown',e=>{ 
+            if(e.key==='Delete' && selectedUnit && isPlayerTurn){ 
+                deleteUnit(selectedUnit); 
+            }
+        });
 
-        canvas.addEventListener('mousedown',async e=>{ if(e.button===2) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(currentTool==='select'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }} else if(currentTool==='delete'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u) await deleteUnit(u);} else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null;} else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null;} else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null;} else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); } else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); } else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); } else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'});} else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'});} draw();});
-        canvas.addEventListener('mousemove',e=>{ if(!draggingUnit&&!rulerStart&&!lineStart) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy; const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY); if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);} draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y}; } else if(rulerStart){ rulerEnd={x,y}; } else if(lineStart){ lineEnd={x,y}; } draw(); });
-        canvas.addEventListener('mouseup',async e=>{ if(e.button===2) return; if(draggingUnit){ draggingUnit=null; dragStart=null; await saveUnits(); } else if(rulerStart){ rulerEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top}; } else if(lineStart){ lineEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top}; lines.push({startX:lineStart.x,startY:lineStart.y,endX:lineEnd.x,endY:lineEnd.y}); lineStart=lineEnd=null;} draw(); });
-        mapImage.onload = () => { draw(); syncUnits(); updateRoomStatus(); };
-    </script>
-</body>
-</html>
+        canvas.addEventListener('mousedown', async e => {
+            if(e.button === 2) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            
+            // Only allow unit manipulation during player's turn
+            if (isPlayerTurn) {
+                if(currentTool === 'select'){ 
+                    const list = currentRoom === 'blue' ? blueUnits : redUnits; 
+                    const u = list.find(u => Math.hypot(x - u.x, y - u.y) <= 8); 
+                    if(u){ 
+                        draggingUnit = u; 
+                        selectedUnit = u; 
+                        dragStart = {x, y}; 
+                    }
+                } else if(currentTool === 'delete'){ 
+                    const list = currentRoom === 'blue' ? blueUnits : redUnits; 
+                    const u = list.find(u => Math.hypot(x - u.x, y - u.y) <= 8); 
+                    if(u) await deleteUnit(u);
+                } else if(currentTool === 'pla_navy' && currentRoom === 'red'){ 
+                    redUnits.push({x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy'}); 
+                    unitsMoved = true;
+                } else if(currentTool === 'pla_plane' && currentRoom === 'red'){ 
+                    redUnits.push({x, y, initialX: x, initialY: y, color: 'rgba(255,150,150,1)', type: 'pla_plane'}); 
+                    unitsMoved = true;
+                } else if(currentTool === 'twn' && currentRoom === 'blue'){ 
+                    blueUnits.push({x, y, initialX: x, initialY: y, color: 'blue', type: 'twn'}); 
+                    unitsMoved = true;
+                } else if(currentTool === 'twn_plane' && currentRoom === 'blue'){ 
+                    blueUnits.push({x, y, initialX: x, initialY: y, color: 'rgba(150,150,255,1)', type: 'twn_plane'}); 
+                    unitsMoved = true;
+                }
+            }
+            
+            // These tools can be used even when it's not player's turn
+            if(currentTool === 'ruler'){ 
+                rulerStart = {x, y}; 
+                rulerEnd = null;
+            } else if(currentTool === 'line'){ 
+                lineStart = {x, y}; 
+                lineEnd = null;
+            } else if(currentTool === 'last_known'){ 
+                lastKnownPosition = {x, y}; 
+                currentTool = null;
+            } else if(currentTool === 'small_search'){ 
+                circles.push({x, y, radius: 35, color: 'yellow'});
+            } else if(currentTool === 'large_search'){ 
+                circles.push({x, y, radius: 50, color: 'yellow'});
+            }
+            
+            draw();
+        });
+        
+        canvas.addEventListener('mousemove', e => {
+            if(!draggingUnit && !rulerStart && !lineStart) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            
+            if(draggingUnit && isPlayerTurn){ 
+                const dx = x - dragStart.x, dy = y - dragStart.y; 
+                let nx = draggingUnit.x + dx, ny = draggingUnit.y + dy; 
+                const d = Math.hypot(nx - draggingUnit.initialX, ny - draggingUnit.initialY); 
+                if(d > MOVE_RANGE){ 
+                    const a = Math.atan2(ny - draggingUnit.initialY, nx - draggingUnit.initialX); 
+                    nx = draggingUnit.initialX + MOVE_RANGE * Math.cos(a); 
+                    ny = draggingUnit.initialY + MOVE_RANGE * Math.sin(a);
+                }
+                draggingUnit.x
