@@ -159,6 +159,22 @@
             alert('Failed to save units.'); isPendingChange=false;
         }
         setInterval(syncUnits,5000); setInterval(updateRoomStatus,5000);
+        async function saveEnemyUnits() {
+            const enemyRoom = currentRoom === 'red' ? 'blue' : 'red';
+            const units = enemyRoom === 'blue' ? blueUnits : redUnits;
+            try {
+                const res = await fetch(`${BASE_URL}/save_units`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: enemyRoom, units })
+                });
+
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+            } catch (err) {
+                console.error(`Failed to save enemy units for room ${enemyRoom}:`, err);
+            }
+        }
 
         function calculateDistance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 
@@ -274,32 +290,28 @@
         }
 
 
-        async function performAttackOnTarget(target) {
-            // Remove target locally
-            const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
-            const idx = oppList.indexOf(target);
-            if (idx !== -1) {
-                oppList.splice(idx, 1);
-                draw();
-                // Notify user
-                alert(`已攻擊座標 (${target.x.toFixed(2)}, ${target.y.toFixed(2)}) 的單位`);
-                // Send delete command to backend
-                try {
-                    await fetch(`${BASE_URL}/delete_unit`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({room: currentRoom, x: target.x, y: target.y})
-                    });
-                } catch (err) {
-                    console.error('Error sending delete command:', err);
-                }
-                // Also save updated unit list
-                await saveUnits();
-            }
-            // Hide attack menu and reset selection
-            attackMenu.style.display = 'none';
-            selectedUnit = null;
+async function performAttackOnTarget(target) {
+    const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
+    const enemyRoom = currentRoom === 'blue' ? 'red' : 'blue';
+    const idx = oppList.indexOf(target);
+    if (idx !== -1) {
+        oppList.splice(idx, 1);
+        draw();
+        alert(`已攻擊座標 (${target.x.toFixed(2)}, ${target.y.toFixed(2)}) 的單位`);
+        try {
+            await fetch(`${BASE_URL}/delete_unit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room: enemyRoom, x: target.x, y: target.y })
+            });
+            await saveEnemyUnits(); // 新增這行
+        } catch (err) {
+            console.error('Error sending delete or save command:', err);
         }
+    }
+    attackMenu.style.display = 'none';
+    selectedUnit = null;
+}
 
         async function deleteUnit(u){ const list=currentRoom==='blue'?blueUnits:redUnits; const idx=list.indexOf(u); if(idx>-1){ list.splice(idx,1); await saveUnits(); draw(); } selectedUnit=null; }
 
