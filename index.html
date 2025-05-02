@@ -288,7 +288,24 @@
             attackMenu.style.visibility = 'visible';
         }
 
-
+async function chatWithGemini() {
+            const canvasData = canvas.toDataURL('image/png');
+            const userInput = document.getElementById('chatInput').value;
+            try {
+                const response = await fetch(`${BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: canvasData, message: userInput }),
+                });
+                const data = await response.json();
+                document.getElementById('responseArea').value += `\nYou: ${userInput}\nGemini: ${data.message || 'No response'}\n`;
+                document.getElementById('chatInput').value = '';
+            } catch (error) {
+                document.getElementById('responseArea').value += `\nError: ${error.message}\n`;
+            }
+        }
 async function performAttackOnTarget(target) {
     const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
     const enemyRoom = currentRoom === 'blue' ? 'red' : 'blue';
