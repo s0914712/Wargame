@@ -20,9 +20,9 @@
         #roomSelection { margin-right: 10px; }
         .disabled { color: #999; cursor: not-allowed; }
         #roomStatus { margin-top: 10px; font-size: 14px; }
-        #contextMenu { position: absolute; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); z-index: 1000; display: none; }
-        .menu-item { padding: 5px 10px; cursor: pointer; }
-        .menu-item:hover:not(.disabled) { background-color: #f0f0f0; }
+        #contextMenu, #attackMenu { position: absolute; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); z-index: 1000; display: none; }
+        .menu-item, .attack-item { padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+        .menu-item:hover:not(.disabled), .attack-item:hover { background-color: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -62,6 +62,7 @@
                 <div id="ctxAttack" class="menu-item" onclick="contextMenuAction('attack')">Attack</div>
                 <div id="ctxDelete" class="menu-item" onclick="contextMenuAction('delete')">Delete</div>
             </div>
+            <div id="attackMenu"></div>
         </div>
         <div id="controls">
             <div><button onclick="toggleSearchAreas()">Display Search Plan</button></div>
@@ -85,13 +86,13 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const contextMenu = document.getElementById('contextMenu');
-        let currentTool = null, blueUnits = [], redUnits = [], circles = [], lines = [];
-        let rulerStart = null, rulerEnd = null, lineStart = null, lineEnd = null;
-        let draggingUnit = null, dragStart = null;
-        let showSearchAreas = false, showOpponent = false;
-        let lastKnownPosition = { x: 500, y: 600 };
-        let turnCount = 1, currentPlayer = 'PLA', currentRoom = 'none';
-        let isPendingChange = false, selectedUnit = null, attackMode = false;
+        const attackMenu = document.getElementById('attackMenu');
+        let currentTool = null, blueUnits = [], redUnits = [], circles = [], lines = [],
+            rulerStart = null, rulerEnd = null, lineStart = null, lineEnd = null,
+            draggingUnit = null, dragStart = null,
+            showSearchAreas = false, showOpponent = false,
+            lastKnownPosition = { x: 500, y: 600 }, turnCount = 1, currentPlayer = 'PLA', currentRoom = 'none',
+            isPendingChange = false, selectedUnit = null, attackMode = false;
         const MOVE_RANGE = 80, ATTACK_RANGE = MOVE_RANGE * 2;
         const PLANE_RADIUS = 150, NAVY_RADIUS = 50;
         const BASE_URL = 'https://wargame-1087471739366.us-central1.run.app';
@@ -101,32 +102,32 @@
         mapImage.src = 'Taiwan.png';
         mapImage.onerror = () => { ctx.fillStyle = 'white'; ctx.font = '20px Arial'; ctx.fillText('Failed to load map image.', 50, 50); };
 
-        const GRID_ROWS = 4, GRID_COLS = 6;
-        const GRID_START_X = 100, GRID_START_Y = 300;
-        const CELL_W = 50, CELL_H = 50;
+        const GRID_ROWS = 4, GRID_COLS = 6, GRID_START_X = 100, GRID_START_Y = 300, CELL_W = 50, CELL_H = 50;
         const SEARCH_AREAS = [];
         for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
                 SEARCH_AREAS.push({ x1: GRID_START_X + c*CELL_W, y1: GRID_START_Y + r*CELL_H, x2: GRID_START_X + (c+1)*CELL_W, y2: GRID_START_Y + (r+1)*CELL_H });
             }
         }
-        let probabilities = initProb();
-        function initProb() {
-            const center = GRID_COLS-1;
+        let probabilities = initializeProbabilities();
+        function initializeProbabilities() {
+            const center = GRID_COLS - 1;
             const arr = [...Array(GRID_COLS).keys()];
             const y = arr.map(v => Math.exp(-Math.pow(v-center,2)/2)/Math.sqrt(2*Math.PI));
-            let p=[]; for(let i=0;i<GRID_ROWS;i++) p.push(...y);
-            const sum = p.reduce((a,b)=>a+b,0); return p.map(v=>v/sum);
+            let p = [];
+            for (let i = 0; i < GRID_ROWS; i++) p.push(...y);
+            const sum = p.reduce((a,b)=>a+b,0);
+            return p.map(v=>v/sum);
         }
 
         async function selectRoom() {
             const room = document.getElementById('roomSelect').value;
             if (room === 'none') { currentRoom = 'none'; updateRoom(); return; }
             try {
-                const res = await fetch(`${BASE_URL}/select_room`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+                const res = await fetch(`${BASE_URL}/select_room`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room }) });
                 const d = await res.json(); if (d.error) throw new Error(d.error);
                 currentRoom = room; updateRoom(); updateRoomStatus();
-            } catch(e) { alert(e.message); document.getElementById('roomSelect').value='none'; currentRoom='none'; }
+            } catch(e) { alert(e.message); document.getElementById('roomSelect').value = 'none'; currentRoom = 'none'; }
         }
         function updateRoom() {
             ['plaNavyBtn','plaPlaneBtn','twnNavyBtn','twnPlaneBtn'].forEach(id=>{
@@ -139,26 +140,23 @@
             }
         }
         async function updateRoomStatus() {
-            try {
-                const res = await fetch(`${BASE_URL}/get_room_state`);
-                const d = await res.json();
-                document.getElementById('blueIp').textContent = d.room_state.blue_ip || 'Not joined';
-                document.getElementById('redIp').textContent = d.room_state.red_ip || 'Not joined';
-            } catch {} }
+            try { const res=await fetch(`${BASE_URL}/get_room_state`); const d=await res.json();
+                document.getElementById('blueIp').textContent=d.room_state.blue_ip||'Not joined';
+                document.getElementById('redIp').textContent=d.room_state.red_ip||'Not joined';
+            } catch{} }
 
         async function syncUnits() {
             if (isPendingChange) return;
-            try { const res = await fetch(`${BASE_URL}/get_units`); const d = await res.json(); blueUnits = d.blueUnits||[]; redUnits = d.redUnits||[]; draw(); } catch {} }
+            try { const res=await fetch(`${BASE_URL}/get_units`); const d=await res.json(); blueUnits=d.blueUnits||[]; redUnits=d.redUnits||[]; draw(); } catch{} }
         async function saveUnits() {
             if (currentRoom==='none') return;
-            isPendingChange=true; let r=0;
-            while(r<3){ try {
+            isPendingChange=true; let rcount=0;
+            while(rcount<3){ try {
                 const units = currentRoom==='blue'?blueUnits:redUnits;
-                const res = await fetch(`${BASE_URL}/save_units`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,units})});
-                const d = await res.json(); if (d.error) throw new Error(d.error);
-                isPendingChange=false; return;
-            } catch { r++; await new Promise(s=>setTimeout(s,500)); }}
-            alert('Save failed'); isPendingChange=false;
+                const res = await fetch(`${BASE_URL}/save_units`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room:currentRoom, units }) });
+                const d=await res.json(); if(d.error) throw new Error(d.error);
+                isPendingChange=false; return; } catch { rcount++; await new Promise(s=>setTimeout(s,500)); }}
+            alert('Failed to save units.'); isPendingChange=false;
         }
         setInterval(syncUnits,5000); setInterval(updateRoomStatus,5000);
 
@@ -167,166 +165,76 @@
         function draw() {
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.drawImage(mapImage,0,0,canvas.width,canvas.height);
-            // search areas
-            if (showSearchAreas) SEARCH_AREAS.forEach((area,i)=>{
+            if(showSearchAreas) SEARCH_AREAS.forEach((area,i)=>{
                 const p=probabilities[i], cv=Math.round(255*(1-2*p));
                 ctx.fillStyle=`rgba(${255*0.7+cv*0.3},${255*0.7+cv*0.3},${255*0.7+255*0.3},0.7)`;
                 ctx.strokeStyle='black'; ctx.fillRect(area.x1,area.y1,area.x2-area.x1,area.y2-area.y1);
                 ctx.strokeRect(area.x1,area.y1,area.x2-area.x1,area.y2-area.y1);
                 ctx.fillStyle=p<0.5?'black':'white'; ctx.font='12px Arial'; ctx.fillText(`${i+1} (${p.toFixed(2)})`,area.x1+3,area.y1+15);
             });
-            // units
             const myList = currentRoom==='blue'?blueUnits:redUnits;
             const oppList = currentRoom==='blue'?redUnits:blueUnits;
             const visibleOpp = [];
             oppList.forEach(u=>{
-                let v=false;
+                let vis=false;
                 myList.forEach(mu=>{ const r = mu.type&&mu.type.includes('plane')?PLANE_RADIUS:NAVY_RADIUS;
-                    if (calculateDistance(mu,u)<=r) v=true;
+                    if(calculateDistance(mu,u)<=r) vis=true;
                 });
-                if(v||showOpponent) visibleOpp.push(u);
+                if(vis||showOpponent) visibleOpp.push(u);
             });
-            // draw my
-            myList.forEach(u=>drawUnit(u, false));
-            visibleOpp.forEach(u=>drawUnit(u, true));
-
-            // circles & lines
+            myList.forEach(u=>drawUnit(u,false)); visibleOpp.forEach(u=>drawUnit(u,true));
             circles.forEach(c=>{ ctx.beginPath(); ctx.arc(c.x,c.y,c.radius,0,2*Math.PI); ctx.strokeStyle=c.color; ctx.lineWidth=2; ctx.stroke(); });
             lines.forEach(l=>{ ctx.beginPath(); ctx.moveTo(l.startX,l.startY); ctx.lineTo(l.endX,l.endY); ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.stroke(); });
-            // ruler
-            if(rulerStart&&rulerEnd){ ctx.beginPath(); ctx.moveTo(rulerStart.x,rulerStart.y); ctx.lineTo(rulerEnd.x,rulerEnd.y);
-                ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]);
+            if(rulerStart&&rulerEnd){ ctx.beginPath(); ctx.moveTo(rulerStart.x,rulerStart.y); ctx.lineTo(rulerEnd.x,rulerEnd.y); ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]);
                 const d=(calculateDistance(rulerStart,rulerEnd)-5)/10;
                 ctx.fillStyle='black'; ctx.fillText(`${d.toFixed(2)} ''`,(rulerStart.x+rulerEnd.x)/2,(rulerStart.y+rulerEnd.y)/2);
             }
-            // LKP
-            ctx.fillStyle='red'; ctx.font='16px Arial';
-            ctx.fillText('+',lastKnownPosition.x,lastKnownPosition.y);
-            ctx.fillText('+ = Last Known Position',lastKnownPosition.x+20,lastKnownPosition.y);
+            ctx.fillStyle='red'; ctx.font='16px Arial'; ctx.fillText('+',lastKnownPosition.x,lastKnownPosition.y); ctx.fillText('+ = Last Known Position',lastKnownPosition.x+20,lastKnownPosition.y);
         }
-        function drawUnit(u, isOpp){
-            ctx.beginPath(); ctx.arc(u.x,u.y,5,0,2*Math.PI);
-            if(isOpp){ ctx.globalAlpha=0.5; ctx.setLineDash([5,5]); }
-            ctx.strokeStyle=u.color; ctx.lineWidth=2; ctx.stroke();
-            ctx.globalAlpha=1; ctx.setLineDash([]);
-            if(u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,8,0,2*Math.PI); ctx.strokeStyle='yellow'; ctx.lineWidth=1; ctx.stroke(); }
-            if(attackMode&&u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,ATTACK_RANGE,0,2*Math.PI); ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]); }
-        }
+        function drawUnit(u,isOpp){ ctx.beginPath(); ctx.arc(u.x,u.y,5,0,2*Math.PI); if(isOpp){ ctx.globalAlpha=0.5; ctx.setLineDash([5,5]); } ctx.strokeStyle=u.color; ctx.lineWidth=2; ctx.stroke(); ctx.globalAlpha=1; ctx.setLineDash([]); if(u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,8,0,2*Math.PI); ctx.strokeStyle='yellow'; ctx.lineWidth=1; ctx.stroke(); } if(attackMode&&u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,ATTACK_RANGE,0,2*Math.PI); ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]); }}
 
-        function setTool(tool){
-            if (currentRoom==='none' && !['delete','select'].includes(tool)) { alert('Please select a room first!'); return; }
-            currentTool=tool; rulerStart=lineStart=lineEnd=rulerEnd=null; attackMode=false; draw();
-        }
+        function setTool(tool){ if(currentRoom==='none'&&!['delete','select'].includes(tool)){alert('Please select a room first!');return;} currentTool=tool; rulerEnd=rulerStart=lineStart=lineEnd=null; attackMode=false; draw(); }
         function undo(){ if(lines.length) lines.pop(); else if(circles.length) circles.pop(); draw(); saveUnits(); }
         function toggleSearchAreas(){ showSearchAreas=!showSearchAreas; draw(); }
         function toggleOpponentPosition(){ showOpponent=!showOpponent; draw(); }
         function setLastKnownPosition(){ currentTool='last_known'; }
         function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); }
 
-        // context menu & interactions
-        canvas.addEventListener('contextmenu', e=>{
-            e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            const myList = currentRoom==='blue'?blueUnits:redUnits;
-            const unit = myList.find(u=>Math.hypot(x-u.x,y-u.y)<=8);
-            if(!unit){ contextMenu.style.display='none'; selectedUnit=null; draw(); return; }
-            selectedUnit = unit;
-            // determine attack availability
-            const oppList = currentRoom==='blue'?redUnits:blueUnits;
-            const targets = oppList.filter(u=>calculateDistance(unit,u)<=ATTACK_RANGE);
-            const attackItem = document.getElementById('ctxAttack');
-            if(targets.length>0){ attackItem.classList.remove('disabled'); }
-            else { attackItem.classList.add('disabled'); }
-            // position menu within container bounds
-            const cont = document.getElementById('canvas-container').getBoundingClientRect();
-            const mw = contextMenu.offsetWidth, mh = contextMenu.offsetHeight;
-            let posX = e.clientX - cont.left, posY = e.clientY - cont.top;
-            posX = Math.min(Math.max(0, posX), cont.width - mw);
-            posY = Math.min(Math.max(0, posY), cont.height - mh);
-            contextMenu.style.left = posX + 'px'; contextMenu.style.top = posY + 'px';
-            contextMenu.style.display = 'block'; draw();
-        });
-        document.addEventListener('click', e=>{
-            if(!contextMenu.contains(e.target)){ contextMenu.style.display='none'; attackMode=false; draw(); }
-        });
+        canvas.addEventListener('contextmenu',e=>{
+            e.preventDefault(); const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
+            const myList=currentRoom==='blue'?blueUnits:redUnits;
+            const unit=myList.find(u=>Math.hypot(x-u.x,y-u.y)<=8);
+            if(!unit){ contextMenu.style.display='none'; attackMenu.style.display='none'; selectedUnit=null; draw(); return; }
+            selectedUnit=unit;
+            const attackItem=document.getElementById('ctxAttack');
+            const oppList=currentRoom==='blue'?redUnits:blueUnits;
+            const targets=oppList.filter(u=>calculateDistance(unit,u)<=ATTACK_RANGE);
+            if(targets.length) attackItem.classList.remove('disabled'); else attackItem.classList.add('disabled');
 
-        function contextMenuAction(action){
-            if(action==='attack' && document.getElementById('ctxAttack').classList.contains('disabled')) return;
-            contextMenu.style.display='none';
-            if(action==='move'){ draggingUnit = selectedUnit; currentTool='select'; }
-            else if(action==='attack'){ attackMode=true; canvas.style.cursor='crosshair'; canvas.addEventListener('click', performAttack, { once:true }); }
-            else if(action==='delete'){ deleteUnit(selectedUnit); }
-        }
-
-        function performAttack(e){
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            const oppList = currentRoom==='blue'?redUnits:blueUnits;
-            let hit=false;
-            for(let i=oppList.length-1; i>=0; i--){ const u=oppList[i];
-                if(calculateDistance({x:selectedUnit.x,y:selectedUnit.y},u)<=ATTACK_RANGE && Math.hypot(x-u.x,y-u.y)<=8){ oppList.splice(i,1); hit=true; break; }
-            }
-            if(!hit) alert('No valid target in range. Attack canceled.');
-            attackMode=false; selectedUnit=null; canvas.style.cursor='crosshair'; saveUnits(); draw();
-        }
-
-        async function deleteUnit(u){
-            const list = currentRoom==='blue'?blueUnits:redUnits;
-            const idx = list.indexOf(u);
-            if(idx>-1){ list.splice(idx,1); await saveUnits(); draw(); }
-            selectedUnit=null;
-        }
-
-        document.addEventListener('keydown', e=>{
-            if(e.key==='Delete' && selectedUnit){ deleteUnit(selectedUnit); }
+            const contRect=document.getElementById('canvas-container').getBoundingClientRect();
+            const mw=contextMenu.offsetWidth, mh=contextMenu.offsetHeight;
+            let posX=e.clientX-contRect.left, posY=e.clientY-contRect.top;
+            posX=Math.min(Math.max(0,posX),contRect.width-mw);
+            posY=Math.min(Math.max(0,posY),contRect.height-mh);
+            contextMenu.style.left=posX+'px'; contextMenu.style.top=posY+'px';
+            attackMenu.style.display='none';
+            contextMenu.style.display='block'; draw();
         });
+        document.addEventListener('click',e=>{ if(!contextMenu.contains(e.target)&&(attackMenu.style.display==='none'||!attackMenu.contains(e.target))){ contextMenu.style.display='none'; attackMenu.style.display='none'; attackMode=false; draw(); }});
 
-        canvas.addEventListener('mousedown', async e=>{
-            if(e.button===2) return;
-            const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            if(currentTool==='select'){
-                const myList = currentRoom==='blue'?blueUnits:redUnits;
-                const u = myList.find(u=>Math.hypot(x-u.x,y-u.y)<=8);
-                if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }
-            } else if(currentTool==='delete'){
-                const myList = currentRoom==='blue'?blueUnits:redUnits;
-                const u = myList.find(u=>Math.hypot(x-u.x,y-u.y)<=8);
-                if(u) deleteUnit(u);
-            } else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null; }
-            else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null; }
-            else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null; }
-            else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); }
-            else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); }
-            else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); }
-            else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); }
-            else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'}); }
-            else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'}); }
-            draw();
-        });
-        
-        canvas.addEventListener('mousemove', e=>{
-            if(!draggingUnit&&!rulerStart&&!lineStart) return;
-            const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
-            if(draggingUnit){
-                const dx=x-dragStart.x, dy=y-dragStart.y;
-                let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy;
-                const d = calculateDistance({x:draggingUnit.initialX,y:draggingUnit.initialY},{x:nx,y:ny});
-                if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a); }
-                draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y};
-            } else if(rulerStart){ rulerEnd={x,y}; }
-            else if(lineStart){ lineEnd={x,y}; }
-            draw();
-        });
-        
-        canvas.addEventListener('mouseup', async e=>{
-            if(e.button===2) return;
-            if(draggingUnit){ draggingUnit=null; dragStart=null; await saveUnits(); }
-            else if(rulerStart){ rulerEnd={ x:e.clientX-canvas.getBoundingClientRect().left, y:e.clientY-canvas.getBoundingClientRect().top }; }
-            else if(lineStart){ lineEnd={ x:e.clientX-canvas.getBoundingClientRect().left, y:e.clientY-canvas.getBoundingClientRect().top }; lines.push({ startX:lineStart.x, startY:lineStart.y, endX:lineEnd.x, endY:lineEnd.y }); lineStart=lineEnd=null; }
-            draw();
-        });
+        function contextMenuAction(action){ contextMenu.style.display='none'; if(action==='move'){ draggingUnit=selectedUnit; currentTool='select'; } else if(action==='attack'){ showAttackMenu(); } else if(action==='delete'){ deleteUnit(selectedUnit); }}
 
+        function showAttackMenu(){ const oppList=currentRoom==='blue'?redUnits:blueUnits; const valid=oppList.filter(u=>calculateDistance(selectedUnit,u)<=ATTACK_RANGE); if(!valid.length){ alert('No targets in range.'); return; } attackMenu.innerHTML=''; valid.forEach((u,i)=>{ const div=document.createElement('div'); div.className='attack-item'; div.textContent=`${i+1}. (${Math.round(u.x)},${Math.round(u.y)})`; div.onclick=()=>performAttackOnTarget(u); attackMenu.appendChild(div); }); const contRect=document.getElementById('canvas-container').getBoundingClientRect(); const cRect=canvas.getBoundingClientRect(); const x=selectedUnit.x+10, y=selectedUnit.y; attackMenu.style.left=`${cRect.left-contRect.left+x}px`; attackMenu.style.top=`${cRect.top-contRect.top+y}px`; attackMenu.style.display='block'; }
+
+        function performAttackOnTarget(target){ const oppList=currentRoom==='blue'?redUnits:blueUnits; const idx=oppList.indexOf(target); if(idx!==-1){ oppList.splice(idx,1); saveUnits(); } attackMenu.style.display='none'; selectedUnit=null; draw(); }
+
+        async function deleteUnit(u){ const list=currentRoom==='blue'?blueUnits:redUnits; const idx=list.indexOf(u); if(idx>-1){ list.splice(idx,1); await saveUnits(); draw(); } selectedUnit=null; }
+
+        document.addEventListener('keydown',e=>{ if(e.key==='Delete'&&selectedUnit){ deleteUnit(selectedUnit); }});
+
+        canvas.addEventListener('mousedown',async e=>{ if(e.button===2) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(currentTool==='select'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }} else if(currentTool==='delete'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u) await deleteUnit(u);} else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null;} else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null;} else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null;} else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); } else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); } else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); } else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'});} else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'});} draw();});
+        canvas.addEventListener('mousemove',e=>{ if(!draggingUnit&&!rulerStart&&!lineStart) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy; const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY); if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);} draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y}; } else if(rulerStart){ rulerEnd={x,y}; } else if(lineStart){ lineEnd={x,y}; } draw(); });
+        canvas.addEventListener('mouseup',async e=>{ if(e.button===2) return; if(draggingUnit){ draggingUnit=null; dragStart=null; await saveUnits(); } else if(rulerStart){ rulerEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top}; } else if(lineStart){ lineEnd={x:e.clientX-canvas.getBoundingClientRect().left,y:e.clientY-canvas.getBoundingClientRect().top}; lines.push({startX:lineStart.x,startY:lineStart.y,endX:lineEnd.x,endY:lineEnd.y}); lineStart=lineEnd=null;} draw(); });
         mapImage.onload = () => { draw(); syncUnits(); updateRoomStatus(); };
     </script>
 </body>
