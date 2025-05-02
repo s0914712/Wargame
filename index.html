@@ -158,7 +158,6 @@
                 isPendingChange=false; return; } catch { rcount++; await new Promise(s=>setTimeout(s,500)); }}
             alert('Failed to save units.'); isPendingChange=false;
         }
-        setInterval(syncUnits,5000); setInterval(updateRoomStatus,5000);
         async function saveEnemyUnits() {
             const enemyRoom = currentRoom === 'red' ? 'blue' : 'red';
             const units = enemyRoom === 'blue' ? blueUnits : redUnits;
