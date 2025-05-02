@@ -220,7 +220,15 @@
             attackMenu.style.display='none';
             contextMenu.style.display='block'; draw();
         });
-        document.addEventListener('click',e=>{ if(!contextMenu.contains(e.target)&&(attackMenu.style.display==='none'||!attackMenu.contains(e.target))){ contextMenu.style.display='none'; attackMenu.style.display='none'; attackMode=false; draw(); }});
+        document.addEventListener('click', e => {
+    // Hide menus when clicking outside both contextMenu and attackMenu
+    if (!contextMenu.contains(e.target) && !attackMenu.contains(e.target)) {
+        contextMenu.style.display = 'none';
+        attackMenu.style.display = 'none';
+        attackMode = false;
+        draw();
+    }
+});
 
         function contextMenuAction(action){ contextMenu.style.display='none'; if(action==='move'){ draggingUnit=selectedUnit; currentTool='select'; } else if(action==='attack'){ showAttackMenu(); } else if(action==='delete'){ deleteUnit(selectedUnit); }}
 
