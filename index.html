@@ -185,6 +185,21 @@
             alert('Failed to save units.'); 
             isPendingChange=false;
         }
+        async function saveEnemyUnits() {
+            const enemyRoom = currentRoom === 'red' ? 'blue' : 'red';
+            const units = enemyRoom === 'blue' ? blueUnits : redUnits;
+            try {
+                const res = await fetch(`${BASE_URL}/save_units`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: enemyRoom, units })
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+            } catch (err) {
+                console.error(`Failed to save enemy units for room ${enemyRoom}:`, err);
+            }
+        }
         setInterval(updateRoomStatus,5000);
 
         function calculateDistance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
@@ -429,10 +444,11 @@
                     await fetch(`${BASE_URL}/delete_unit`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({room: currentRoom, x: target.x, y: target.y})
+                        body: JSON.stringify({ room: currentRoom === 'blue' ? 'red' : 'blue', x: target.x, y: target.y })
                     });
+                    await saveEnemyUnits();
                 } catch (err) {
-                    console.error('Error sending delete command:', err);
+                    console.error('Error sending delete/save command:', err);
                 }
             }
             attackMenu.style.display = 'none';
@@ -480,13 +496,13 @@
             } else if(currentTool==='last_known'){ 
                 lastKnownPosition={x,y}; 
                 currentTool=null;
-            } else if(currentTool==='pla_navy'&&currentRoom==='red'){ 
+            } else if(currentTool==='pla_navy'&¤tRoom==='red'){ 
                 redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); 
-            } else if(currentTool==='pla_plane'&&currentRoom==='red'){ 
+            } else if(currentTool==='pla_plane'&¤tRoom==='red'){ 
                 redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); 
-            } else if(currentTool==='twn'&&currentRoom==='blue'){ 
+            } else if(currentTool==='twn'&¤tRoom==='blue'){ 
                 blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); 
-            } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ 
+            } else if(currentTool==='twn_plane'&¤tRoom==='blue'){ 
                 blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); 
             } else if(currentTool==='small_search'){ 
                 circles.push({x,y,radius:35,color:'yellow'});
