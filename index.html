@@ -234,7 +234,32 @@
 
         function showAttackMenu(){ const oppList=currentRoom==='blue'?redUnits:blueUnits; const valid=oppList.filter(u=>calculateDistance(selectedUnit,u)<=ATTACK_RANGE); if(!valid.length){ alert('No targets in range.'); return; } attackMenu.innerHTML=''; valid.forEach((u,i)=>{ const div=document.createElement('div'); div.className='attack-item'; div.textContent=`${i+1}. (${Math.round(u.x)},${Math.round(u.y)})`; div.onclick=()=>performAttackOnTarget(u); attackMenu.appendChild(div); }); const contRect=document.getElementById('canvas-container').getBoundingClientRect(); const cRect=canvas.getBoundingClientRect(); const x=selectedUnit.x+10, y=selectedUnit.y; attackMenu.style.left=`${cRect.left-contRect.left+x}px`; attackMenu.style.top=`${cRect.top-contRect.top+y}px`; attackMenu.style.display='block'; }
 
-        function performAttackOnTarget(target){ const oppList=currentRoom==='blue'?redUnits:blueUnits; const idx=oppList.indexOf(target); if(idx!==-1){ oppList.splice(idx,1); saveUnits(); } attackMenu.style.display='none'; selectedUnit=null; draw(); }
+        async function performAttackOnTarget(target) {
+            // Remove target locally
+            const oppList = currentRoom === 'blue' ? redUnits : blueUnits;
+            const idx = oppList.indexOf(target);
+            if (idx !== -1) {
+                oppList.splice(idx, 1);
+                draw();
+                // Notify user
+                alert(`已攻擊座標 (${target.x.toFixed(2)}, ${target.y.toFixed(2)}) 的單位`);
+                // Send delete command to backend
+                try {
+                    await fetch(`${BASE_URL}/delete_unit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ x: target.x, y: target.y })
+                    });
+                } catch (err) {
+                    console.error('Error sending delete command:', err);
+                }
+                // Also save updated unit list
+                await saveUnits();
+            }
+            // Hide attack menu and reset selection
+            attackMenu.style.display = 'none';
+            selectedUnit = null;
+        }
 
         async function deleteUnit(u){ const list=currentRoom==='blue'?blueUnits:redUnits; const idx=list.indexOf(u); if(idx>-1){ list.splice(idx,1); await saveUnits(); draw(); } selectedUnit=null; }
 
