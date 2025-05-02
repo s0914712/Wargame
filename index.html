@@ -12,10 +12,10 @@
         #controls { flex: 1; display: flex; flex-direction: column; gap: 10px; }
         #gameCanvas { border: 1px solid black; background-color: #000; cursor: crosshair; }
         button, select, input { padding: 5px; margin: 2px; }
-        #bayesOutput, #chatOutput { width: 100%; height: 150px; resize: none; }
+        #bayesOutput, #chatOutput {    min-height: 100px;    max-height: 300px;    overflow-y: auto;    resize: vertical;}
         #turnInfo { font-weight: bold; }
         #chatSection { display: flex; flex-direction: column; gap: 5px; }
-        #chatInput { width: 100%; height: 100px; resize: vertical; padding: 5px; font-size: 14px; }
+        #chatInput { width: 100%; height: 50px; resize: vertical; padding: 5px; font-size: 14px; }
         #chatButton { align-self: flex-end; }
         #roomSelection { margin-right: 10px; }
         .disabled { color: #999; cursor: not-allowed; }
