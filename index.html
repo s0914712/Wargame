@@ -342,8 +342,8 @@
             }
         }
 
-        async function saveUnits() {
-            if (currentRoom === 'none') return;
+        async function saveUnits(version) {
+            if (currentRoom === 'none') return false;
 
             const units = currentRoom === 'blue' ? blueUnits : redUnits;
             const maxRetries = 3;
@@ -358,16 +358,17 @@
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ room: currentRoom, units }),
+                        body: JSON.stringify({ room: currentRoom, units, version: version || 0 }),
                     });
                     if (!response.ok) {
+                        const data = await response.json();
+                        if (data.error && data.error.includes("Conflict")) {
+                            await syncUnits();
+                            return false; // Retry will be handled by the caller
+                        }
                         throw new Error(`Failed to save units: ${response.statusText}`);
                     }
                     const data = await response.json();
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-                    console.log('Units saved successfully:', data);
                     isPendingChange = false;
                     return true;
                 } catch (error) {
@@ -376,6 +377,48 @@
                     if (retryCount === maxRetries) {
                         alert('Failed to save units after multiple attempts. Please try again.');
                         isPendingChange = false;
+                        return false;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        async function performAttack(attacker, target, opponentRoom) {
+            const maxRetries = 3;
+            let retryCount = 0;
+            let version = (await (await fetch(`${BASE_URL}/get_units`)).json())[f"{opponentRoom}Version"] || 0;
+
+            while (retryCount < maxRetries) {
+                try {
+                    const response = await fetch(`${BASE_URL}/attack`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            attacker_room: currentRoom,
+                            attacker: attacker,
+                            target_room: opponentRoom,
+                            target: target,
+                            version: version
+                        }),
+                    });
+                    if (!response.ok) {
+                        const data = await response.json();
+                        if (data.error && data.error.includes("Conflict")) {
+                            await syncUnits();
+                            version = (await (await fetch(`${BASE_URL}/get_units`)).json())[f"{opponentRoom}Version"] || 0;
+                            continue; // Retry with new version
+                        }
+                        throw new Error(`Failed to perform attack: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    await syncUnits();
+                    return true;
+                } catch (error) {
+                    retryCount++;
+                    console.error(`Error performing attack (attempt ${retryCount}/${maxRetries}):`, error);
+                    if (retryCount === maxRetries) {
+                        alert('Failed to perform attack after multiple attempts. Please try again.');
                         return false;
                     }
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -417,7 +460,6 @@
             const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
             const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
 
-            // Calculate which opponent units are visible based on surveillance
             const visibleOpponentUnits = [];
             const attackableOpponentUnits = [];
             opponentUnits.forEach(opponent => {
@@ -441,7 +483,6 @@
                 }
             });
 
-            // Draw my units
             myUnits.forEach(unit => {
                 ctx.beginPath();
                 ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
@@ -484,7 +525,6 @@
                 }
             });
 
-            // Draw visible opponent units
             visibleOpponentUnits.forEach(unit => {
                 ctx.beginPath();
                 ctx.arc(unit.x, unit.y, 5, 0, Math.PI * 2);
@@ -566,7 +606,7 @@
                 circles.pop();
             }
             draw();
-            saveUnits();
+            saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
         }
 
         function toggleSearchAreas() {
@@ -649,7 +689,6 @@
             document.getElementById('bayesOutput').value = output;
         }
 
-        // Handle right-click to show context menu
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
@@ -672,7 +711,6 @@
             }
         });
 
-        // Hide context menu when clicking elsewhere
         document.addEventListener('click', (e) => {
             if (!contextMenu.contains(e.target)) {
                 contextMenu.style.display = 'none';
@@ -682,7 +720,6 @@
             }
         });
 
-        // Handle context menu actions
         function contextMenuAction(action) {
             if (!selectedUnit) return;
 
@@ -701,7 +738,6 @@
             contextMenu.style.display = 'none';
         }
 
-        // Handle attack action
         async function handleAttack(e) {
             if (e.button === 2) {
                 attackMode = false;
@@ -715,6 +751,7 @@
             const y = e.clientY - rect.top;
 
             const opponentUnits = currentRoom === 'blue' ? redUnits : blueUnits;
+            const opponentRoom = currentRoom === 'blue' ? 'red' : 'blue';
 
             const targetUnit = opponentUnits.find(unit => {
                 const distanceToClick = calculateDistance({ x, y }, unit);
@@ -725,17 +762,11 @@
 
             if (targetUnit) {
                 console.log(`Unit at (${selectedUnit.x}, ${selectedUnit.y}) attacks unit at (${targetUnit.x}, ${targetUnit.y})`);
-                const targetIndex = opponentUnits.indexOf(targetUnit);
-                if (targetIndex !== -1) {
-                    opponentUnits.splice(targetIndex, 1);
-                    const opponentRoom = currentRoom === 'blue' ? 'red' : 'blue';
-                    const tempRoom = currentRoom;
-                    currentRoom = opponentRoom;
-                    const success = await saveUnits();
-                    if (!success) {
-                        await syncUnits();
-                    }
-                    currentRoom = tempRoom;
+                const success = await performAttack(selectedUnit, targetUnit, opponentRoom);
+                if (success) {
+                    selectedUnit = null;
+                    attackMode = false;
+                    draw();
                 }
             } else {
                 console.log('No valid target selected or target is out of attack range');
@@ -746,23 +777,18 @@
             draw();
         }
 
-        // Delete a unit
         async function deleteUnit(unit) {
             const myUnits = currentRoom === 'blue' ? blueUnits : redUnits;
             const unitIndex = myUnits.indexOf(unit);
             if (unitIndex !== -1) {
                 myUnits.splice(unitIndex, 1);
                 draw();
-                const success = await saveUnits();
-                if (!success) {
-                    await syncUnits();
-                }
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             }
             selectedUnit = null;
             currentTool = null;
         }
 
-        // Handle keyboard input for deleting a selected unit
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Delete' && selectedUnit) {
                 deleteUnit(selectedUnit);
@@ -801,16 +827,16 @@
                 currentTool = null;
             } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
                 redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
-                saveUnits();
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
                 redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(255, 150, 150)', type: 'pla_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
-                saveUnits();
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             } else if (currentTool === 'twn' && currentRoom === 'blue') {
                 blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn', surveillanceRadius: NAVY_SURVEILLANCE_RADIUS });
-                saveUnits();
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
                 blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgb(150, 150, 255)', type: 'twn_plane', surveillanceRadius: PLANE_SURVEILLANCE_RADIUS });
-                saveUnits();
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             } else if (currentTool === 'small_search') {
                 circles.push({ x, y, radius: 35, color: 'yellow' });
             } else if (currentTool === 'large_search') {
@@ -859,12 +885,11 @@
             const y = e.clientY - rect.top;
 
             if (draggingUnit) {
-                // Update initialX and initialY to the new position after the move
                 draggingUnit.initialX = draggingUnit.x;
                 draggingUnit.initialY = draggingUnit.y;
                 draggingUnit = null;
                 dragStart = null;
-                await saveUnits();
+                await saveUnits((await (await fetch(`${BASE_URL}/get_units`)).json())[f"{currentRoom}Version"] || 0);
             } else if (rulerStart) {
                 rulerEnd = { x, y };
             } else if (lineStart) {
