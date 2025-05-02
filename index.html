@@ -76,7 +76,8 @@
             <div id="chatSection">
                 <textarea id="chatInput" placeholder="Free chat with Gemini"></textarea>
                 <button id="chatButton" onclick="chatWithGemini()">Free Chat with Gemini</button>
-                <textarea id="chatOutput" readonly></textarea>
+                <textarea id="responseArea" readonly></textarea>
+
             </div>
             <div id="turnInfo">Turn 1: PLA's turn</div>
             <button onclick="endTurn()">End Turn</button>
@@ -365,7 +366,18 @@ async function performAttackOnTarget(target) {
 
     draw();
 });
-        mapImage.onload = () => { draw(); syncUnits(); updateRoomStatus(); };
+        mapImage.onload = () => { draw(); updateRoomStatus(); startTurn();};
+function startTurn() {
+    syncUnits(); // ✅ 每次回合開始時手動同步
+    remainingTime = 30;
+    updateTurnInfo();
+    if (turnTimer) clearInterval(turnTimer);
+    turnTimer = setInterval(() => {
+        remainingTime--;
+        updateTurnInfo();
+        if (remainingTime <= 0) endTurn();
+    }, 1000);
+}
     </script>
 </body>
 </html>
