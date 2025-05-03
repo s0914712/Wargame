@@ -11,12 +11,7 @@
       padding: 10px;
       background-color: #f0f0f0;
     }
-<div id="limitsBar">
-  <label><small>PLA Navy</small><input id="limitPlaNavy" type="number" value="5" min="0" /></label>
-  <label><small>PLA Plane</small><input id="limitPlaPlane" type="number" value="3" min="0" /></label>
-  <label><small>TW Navy</small><input id="limitTwnNavy" type="number" value="5" min="0" /></label>
-  <label><small>TW Plane</small><input id="limitTwnPlane" type="number" value="3" min="0" /></label>
-</div>
+
     #header {
       display: flex;
       flex-wrap: wrap;
@@ -43,15 +38,24 @@
   font-size: 12px;
 }
 
-#unitLimits label {
+#limitsBar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-right: 20px;
+}
+
+#limitsBar label {
   display: flex;
   flex-direction: column;
+  font-size: 12px;
   width: 90px;
 }
-#unitLimits input {
-  width: 100%;
-  padding: 2px 4px;
+
+#limitsBar input {
   font-size: 12px;
+  padding: 2px 4px;
 }
 <fieldset>
   <legend>Unit Limits</legend>
@@ -173,6 +177,12 @@
 <body>
     <h1>War at Sea Tool</h1>
     <div id="header">
+      <div id="limitsBar">
+  <label><small>PLA Navy</small><input id="limitPlaNavy" type="number" value="5" min="0" /></label>
+  <label><small>PLA Plane</small><input id="limitPlaPlane" type="number" value="3" min="0" /></label>
+  <label><small>TW Navy</small><input id="limitTwnNavy" type="number" value="5" min="0" /></label>
+  <label><small>TW Plane</small><input id="limitTwnPlane" type="number" value="3" min="0" /></label>
+</div>
         <div id="roomSelection">
             <label for="roomSelect">Select Room: </label>
             <select id="roomSelect" onchange="selectRoom()">
