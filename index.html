@@ -30,7 +30,13 @@
       flex: 2;
       position: relative;
     }
-
+<fieldset>
+  <legend>Unit Limits</legend>
+  <label>PLA Navy: <input type="number" id="limitPlaNavy" value="5" min="0"></label><br>
+  <label>PLA Plane: <input type="number" id="limitPlaPlane" value="3" min="0"></label><br>
+  <label>Taiwan Navy: <input type="number" id="limitTwnNavy" value="5" min="0"></label><br>
+  <label>Taiwan Plane: <input type="number" id="limitTwnPlane" value="3" min="0"></label>
+</fieldset>
     #controls {
       flex: 1;
       display: flex;
@@ -180,6 +186,12 @@
             </div>
             <div id="attackMenu"></div>
         </div>
+<div id="unitLimits">
+  <label>PLA Navy Limit: <input id="limitPlaNavy" type="number" value="5" min="0" /></label><br>
+  <label>PLA Plane Limit: <input id="limitPlaPlane" type="number" value="3" min="0" /></label><br>
+  <label>Taiwan Navy Limit: <input id="limitTwnNavy" type="number" value="5" min="0" /></label><br>
+  <label>Taiwan Plane Limit: <input id="limitTwnPlane" type="number" value="3" min="0" /></label>
+</div>
 <div id="controls">
     <!-- Gemini chat section moved to top -->
     <div id="chatSection">
@@ -454,8 +466,105 @@ async function performAttackOnTarget(target) {
 
         document.addEventListener('keydown',e=>{ if(e.key==='Delete'&&selectedUnit){ deleteUnit(selectedUnit); }});
 
-        canvas.addEventListener('mousedown',async e=>{ if(e.button===2) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(currentTool==='select'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }} else if(currentTool==='delete'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u) await deleteUnit(u);} else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null;} else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null;} else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null;} else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); } else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); } else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); } else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'});} else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'});} draw();});
-        canvas.addEventListener('mousemove',e=>{ if(!draggingUnit&&!rulerStart&&!lineStart) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy; const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY); if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);} draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y}; } else if(rulerStart){ rulerEnd={x,y}; } else if(lineStart){ lineEnd={x,y}; } draw(); });
+canvas.addEventListener('mousedown', async e => {
+  if (e.button === 2) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+  const getLimit = (id) => parseInt(document.getElementById(id).value, 10);
+
+  if (currentTool === 'select') {
+    const list = currentRoom === 'blue' ? blueUnits : redUnits;
+    const u = list.find(u => Math.hypot(x - u.x, y - u.y) <= 8);
+    if (u) {
+      draggingUnit = u;
+      selectedUnit = u;
+      dragStart = { x, y };
+    }
+
+  } else if (currentTool === 'delete') {
+    const list = currentRoom === 'blue' ? blueUnits : redUnits;
+    const u = list.find(u => Math.hypot(x - u.x, y - u.y) <= 8);
+    if (u) await deleteUnit(u);
+
+  } else if (currentTool === 'ruler') {
+    rulerStart = { x, y };
+    rulerEnd = null;
+
+  } else if (currentTool === 'line') {
+    lineStart = { x, y };
+    lineEnd = null;
+
+  } else if (currentTool === 'last_known') {
+    lastKnownPosition = { x, y };
+    currentTool = null;
+
+  } else if (currentTool === 'pla_navy' && currentRoom === 'red') {
+    const limit = getLimit('limitPlaNavy');
+    const count = redUnits.filter(u => u.type === 'pla_navy').length;
+    if (count >= limit) return alert('PLA Navy 上限已達成');
+    redUnits.push({ x, y, initialX: x, initialY: y, color: 'red', type: 'pla_navy' });
+    saveUnits();
+
+  } else if (currentTool === 'pla_plane' && currentRoom === 'red') {
+    const limit = getLimit('limitPlaPlane');
+    const count = redUnits.filter(u => u.type === 'pla_plane').length;
+    if (count >= limit) return alert('PLA Plane 上限已達成');
+    redUnits.push({ x, y, initialX: x, initialY: y, color: 'rgba(255,150,150,1)', type: 'pla_plane' });
+    saveUnits();
+
+  } else if (currentTool === 'twn' && currentRoom === 'blue') {
+    const limit = getLimit('limitTwnNavy');
+    const count = blueUnits.filter(u => u.type === 'twn').length;
+    if (count >= limit) return alert('Taiwan Navy 上限已達成');
+    blueUnits.push({ x, y, initialX: x, initialY: y, color: 'blue', type: 'twn' });
+    saveUnits();
+
+  } else if (currentTool === 'twn_plane' && currentRoom === 'blue') {
+    const limit = getLimit('limitTwnPlane');
+    const count = blueUnits.filter(u => u.type === 'twn_plane').length;
+    if (count >= limit) return alert('Taiwan Plane 上限已達成');
+    blueUnits.push({ x, y, initialX: x, initialY: y, color: 'rgba(150,150,255,1)', type: 'twn_plane' });
+    saveUnits();
+
+  } else if (currentTool === 'small_search') {
+    circles.push({ x, y, radius: 35, color: 'yellow' });
+
+  } else if (currentTool === 'large_search') {
+    circles.push({ x, y, radius: 50, color: 'yellow' });
+  }
+
+  draw();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!draggingUnit && !rulerStart && !lineStart) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+  if (draggingUnit) {
+    const dx = x - dragStart.x, dy = y - dragStart.y;
+    let nx = draggingUnit.x + dx, ny = draggingUnit.y + dy;
+    const d = Math.hypot(nx - draggingUnit.initialX, ny - draggingUnit.initialY);
+    if (d > MOVE_RANGE) {
+      const a = Math.atan2(ny - draggingUnit.initialY, nx - draggingUnit.initialX);
+      nx = draggingUnit.initialX + MOVE_RANGE * Math.cos(a);
+      ny = draggingUnit.initialY + MOVE_RANGE * Math.sin(a);
+    }
+    draggingUnit.x = nx;
+    draggingUnit.y = ny;
+    dragStart = { x, y };
+
+  } else if (rulerStart) {
+    rulerEnd = { x, y };
+
+  } else if (lineStart) {
+    lineEnd = { x, y };
+  }
+
+  draw();
+});
+
         canvas.addEventListener('mouseup', async e => {
     if (e.button === 2) return;
 
