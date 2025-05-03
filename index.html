@@ -30,6 +30,24 @@
       flex: 2;
       position: relative;
     }
+    #unitLimits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+#unitLimits label {
+  display: flex;
+  flex-direction: column;
+  width: 90px;
+}
+#unitLimits input {
+  width: 100%;
+  padding: 2px 4px;
+  font-size: 12px;
+}
 <fieldset>
   <legend>Unit Limits</legend>
   <label>PLA Navy: <input type="number" id="limitPlaNavy" value="5" min="0"></label><br>
@@ -187,10 +205,10 @@
             <div id="attackMenu"></div>
         </div>
 <div id="unitLimits">
-  <label>PLA Navy Limit: <input id="limitPlaNavy" type="number" value="5" min="0" /></label><br>
-  <label>PLA Plane Limit: <input id="limitPlaPlane" type="number" value="3" min="0" /></label><br>
-  <label>Taiwan Navy Limit: <input id="limitTwnNavy" type="number" value="5" min="0" /></label><br>
-  <label>Taiwan Plane Limit: <input id="limitTwnPlane" type="number" value="3" min="0" /></label>
+  <label><small>PLA Navy</small><input id="limitPlaNavy" type="number" value="5" min="0" /></label>
+  <label><small>PLA Plane</small><input id="limitPlaPlane" type="number" value="3" min="0" /></label>
+  <label><small>TW Navy</small><input id="limitTwnNavy" type="number" value="5" min="0" /></label>
+  <label><small>TW Plane</small><input id="limitTwnPlane" type="number" value="3" min="0" /></label>
 </div>
 <div id="controls">
     <!-- Gemini chat section moved to top -->
