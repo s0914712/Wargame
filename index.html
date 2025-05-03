@@ -247,9 +247,25 @@
             try {
                 const res = await fetch(`${BASE_URL}/select_room`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room }) });
                 const d = await res.json(); if (d.error) throw new Error(d.error);
-                currentRoom = room; updateRoom(); updateRoomStatus();
+                currentRoom = room; updateRoom(); updateRoomStatus();addInitialSpecialUnits();
             } catch(e) { alert(e.message); document.getElementById('roomSelect').value = 'none'; currentRoom = 'none'; }
         }
+        function showVictoryMessage(text) {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = 0;
+    overlay.style.left = 0;
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.background = 'rgba(0,0,0,0.7)';
+    overlay.style.color = 'white';
+    overlay.style.fontSize = '36px';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.innerText = text;
+    document.body.appendChild(overlay);
+}
         function updateRoom() {
             ['plaNavyBtn','plaPlaneBtn','twnNavyBtn','twnPlaneBtn'].forEach(id=>{
                 const b=document.getElementById(id); b.disabled=true; b.classList.add('disabled');
@@ -327,14 +343,85 @@
             }
             ctx.fillStyle='red'; ctx.font='16px Arial'; ctx.fillText('+',lastKnownPosition.x,lastKnownPosition.y); ctx.fillText('+ = Last Known Position',lastKnownPosition.x+20,lastKnownPosition.y);
         }
-        function drawUnit(u,isOpp){ ctx.beginPath(); ctx.arc(u.x,u.y,5,0,2*Math.PI); if(isOpp){ ctx.globalAlpha=0.5; ctx.setLineDash([5,5]); } ctx.strokeStyle=u.color; ctx.lineWidth=2; ctx.stroke(); ctx.globalAlpha=1; ctx.setLineDash([]); if(u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,8,0,2*Math.PI); ctx.strokeStyle='yellow'; ctx.lineWidth=1; ctx.stroke(); } if(attackMode&&u===selectedUnit){ ctx.beginPath(); ctx.arc(u.x,u.y,ATTACK_RANGE,0,2*Math.PI); ctx.setLineDash([5,5]); ctx.strokeStyle='red'; ctx.stroke(); ctx.setLineDash([]); }}
+    function drawUnit(u, isOpp) {
+        ctx.save();
+        if (isOpp) {
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([5, 5]);
+        }
+        ctx.strokeStyle = u.color;
+        ctx.lineWidth = 2;
+        if (u.type === 'twn_army') {
+            // 畫菱形
+            ctx.beginPath();
+            ctx.moveTo(u.x, u.y - 6);
+            ctx.lineTo(u.x + 6, u.y);
+            ctx.lineTo(u.x, u.y + 6);
+            ctx.lineTo(u.x - 6, u.y);
+            ctx.closePath();
+            ctx.stroke();
+        } else {
+        // 預設畫圓形
+            ctx.beginPath();
+            ctx.arc(u.x, u.y, 5, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
 
+        // 選中框線
+        if (u === selectedUnit) {
+            ctx.beginPath();
+            ctx.arc(u.x, u.y, 8, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+        function isInTaiwan(x, y) {    return x >= 400 && x <= 780 && y >= 150 && y <= 550;}
+        function checkVictoryCondition() {
+    const redLandingShips = redUnits.filter(u => u.type === 'pla_landing');
+    const blueArmy = blueUnits.filter(u => u.type === 'twn_army');
+
+    const anyLandingInTaiwan = redLandingShips.some(u => isInTaiwan(u.x, u.y));
+
+    if (anyLandingInTaiwan) {
+        alert('Red Victory: Landing ships have landed in Taiwan!');
+        showVictoryMessage('Red Wins!');
+
+        // 可以加入 disable canvas 或跳出結束畫面
+        return;
+    }
+
+    if (redLandingShips.length === 0) {
+        alert('Blue Victory: All landing ships destroyed!');
+        showVictoryMessage('Blue Wins!');
+
+        return;
+    }
+}
+        function addInitialSpecialUnits() {
+    if (currentRoom === 'red') {
+        redUnits.push({ x: 60, y: 200, type: 'pla_landing', color: 'orange' });
+        redUnits.push({ x: 60, y: 300, type: 'pla_landing', color: 'orange' });
+        redUnits.push({ x: 60, y: 400, type: 'pla_landing', color: 'orange' });
+        saveUnits();
+    } else if (currentRoom === 'blue') {
+        blueUnits.push({ x: 700, y: 250, type: 'twn_army', color: 'green' });
+        blueUnits.push({ x: 650, y: 350, type: 'twn_army', color: 'green' });
+        blueUnits.push({ x: 720, y: 450, type: 'twn_army', color: 'green' });
+        saveUnits();
+    }
+}
         function setTool(tool){ if(currentRoom==='none'&&!['delete','select'].includes(tool)){alert('Please select a room first!');return;} currentTool=tool; rulerEnd=rulerStart=lineStart=lineEnd=null; attackMode=false; draw(); }
         function undo(){ if(lines.length) lines.pop(); else if(circles.length) circles.pop(); draw(); saveUnits(); }
         function toggleSearchAreas(){ showSearchAreas=!showSearchAreas; draw(); }
         function toggleOpponentPosition(){ showOpponent=!showOpponent; draw(); }
         function setLastKnownPosition(){ currentTool='last_known'; }
-        function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); }
+        function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); checkVictoryCondition();
+}
 
         canvas.addEventListener('contextmenu',e=>{
             e.preventDefault(); const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
@@ -485,6 +572,8 @@ async function performAttackOnTarget(target) {
     }
 
     draw();
+    checkVictoryCondition();
+
 });
         mapImage.onload = () => { draw(); updateRoomStatus(); startTurn();};
 function startTurn() {
