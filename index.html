@@ -20,6 +20,26 @@
       align-items: center;
     }
 
+    #limitsBar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-right: 20px;
+    }
+
+    #limitsBar label {
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+      width: 90px;
+    }
+
+    #limitsBar input {
+      font-size: 12px;
+      padding: 2px 4px;
+    }
+
     #container {
       display: flex;
       flex-direction: row;
@@ -30,40 +50,7 @@
       flex: 2;
       position: relative;
     }
-    #unitLimits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-  align-items: center;
-  font-size: 12px;
-}
 
-#limitsBar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-right: 20px;
-}
-
-#limitsBar label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  width: 90px;
-}
-
-#limitsBar input {
-  font-size: 12px;
-  padding: 2px 4px;
-}
-<fieldset>
-  <legend>Unit Limits</legend>
-  <label>PLA Navy: <input type="number" id="limitPlaNavy" value="5" min="0"></label><br>
-  <label>PLA Plane: <input type="number" id="limitPlaPlane" value="3" min="0"></label><br>
-  <label>Taiwan Navy: <input type="number" id="limitTwnNavy" value="5" min="0"></label><br>
-  <label>Taiwan Plane: <input type="number" id="limitTwnPlane" value="3" min="0"></label>
-</fieldset>
     #controls {
       flex: 1;
       display: flex;
