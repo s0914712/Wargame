@@ -243,16 +243,36 @@
             return p.map(v=>v/sum);
         }
 
-        async function selectRoom() {
-            const room = document.getElementById('roomSelect').value;
-            if (room === 'none') { currentRoom = 'none'; updateRoom(); return; }
-            try {
-                const res = await fetch(`${BASE_URL}/select_room`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ room }) });
-                const d = await res.json(); if (d.error) throw new Error(d.error);
-                currentRoom = room; updateRoom(); updateRoomStatus();await addInitialSpecialUnits();
+async function selectRoom() {
+    const room = document.getElementById('roomSelect').value;
+    if (room === 'none') {
+        currentRoom = 'none';
+        updateRoom();
+        return;
+    }
 
-            } catch(e) { alert(e.message); document.getElementById('roomSelect').value = 'none'; currentRoom = 'none'; }
-        }
+    try {
+        const res = await fetch(`${BASE_URL}/select_room`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ room })
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+
+        currentRoom = room;
+        updateRoom();
+        updateRoomStatus();
+
+        await addInitialSpecialUnits();  // 加入單位
+        // ❌ 不要立刻 syncUnits()，會蓋掉剛加入的東西
+        // await syncUnits();
+
+    } catch (e) {
+        alert(e.message);
+        document.getElementById('roomSelect').value = 'none';
+        currentRoom = 'none';
+    }
         function showVictoryMessage(text) {
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
