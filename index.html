@@ -394,10 +394,15 @@ async function selectRoom() {
             const units = enemyRoom === 'blue' ? blueUnits : redUnits;
             try {
                 const res = await fetch(`${BASE_URL}/save_units`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: enemyRoom, units })
-                });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        room: enemyRoom,
+        units,
+        force: true // ← 加這個
+    })
+});
+
 
                 const d = await res.json();
                 if (d.error) throw new Error(d.error);
