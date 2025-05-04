@@ -289,25 +289,28 @@
 
         // 新增 5 艘 PLA Navy
         redUnits.push(
-            createUnit(80, 100, 'pla_navy', 'red'),
-            createUnit(100, 150, 'pla_navy', 'red'),
-            createUnit(120, 200, 'pla_navy', 'red'),
-            createUnit(140, 250, 'pla_navy', 'red'),
-            createUnit(160, 300, 'pla_navy', 'red')
+            { x: 80, y: 100, type: 'pla_navy', color: 'red' },
+            { x: 100, y: 150, type: 'pla_navy', color: 'red' },
+            { x: 120, y: 200, type: 'pla_navy', color: 'red' },
+            { x: 140, y: 250, type: 'pla_navy', color: 'red' },
+            { x: 160, y: 300, type: 'pla_navy', color: 'red' }
         );
 
         // 新增 10 架 PLA 飛機
         for (let i = 0; i < 10; i++) {
-            redUnits.push(createUnit(
-                200 + i * 20, 80, 'pla_plane', 'rgba(255,150,150,1)'
-            ));
+            redUnits.push({
+                x: 200 + i * 20,
+                y: 80,
+                type: 'pla_plane',
+                color: 'rgba(255,150,150,1)'
+            });
         }
 
         // 新增 3 艘登陸艦
         redUnits.push(
-            createUnit(60, 350, 'pla_landing', 'orange'),
-            createUnit(60, 400, 'pla_landing', 'orange'),
-            createUnit(60, 450, 'pla_landing', 'orange')
+            { x: 60, y: 350, type: 'pla_landing', color: 'orange' },
+            { x: 60, y: 400, type: 'pla_landing', color: 'orange' },
+            { x: 60, y: 450, type: 'pla_landing', color: 'orange' }
         );
 
         await saveUnits();
@@ -317,24 +320,27 @@
 
         // 新增 4 艘 Taiwan Navy
         blueUnits.push(
-            createUnit(650, 100, 'twn', 'blue'),
-            createUnit(670, 150, 'twn', 'blue'),
-            createUnit(690, 200, 'twn', 'blue'),
-            createUnit(710, 250, 'twn', 'blue')
+            { x: 650, y: 100, type: 'twn', color: 'blue' },
+            { x: 670, y: 150, type: 'twn', color: 'blue' },
+            { x: 690, y: 200, type: 'twn', color: 'blue' },
+            { x: 710, y: 250, type: 'twn', color: 'blue' }
         );
 
         // 新增 5 架 Taiwan 飛機
         for (let i = 0; i < 5; i++) {
-            blueUnits.push(createUnit(
-                600 + i * 20, 80, 'twn_plane', 'rgba(150,150,255,1)'
-            ));
+            blueUnits.push({
+                x: 600 + i * 20,
+                y: 80,
+                type: 'twn_plane',
+                color: 'rgba(150,150,255,1)'
+            });
         }
 
-        // 新增 3 個地面部隊
+        // 新增 3 個地面部隊（畫菱形）
         blueUnits.push(
-            createUnit(700, 300, 'twn_army', 'green'),
-            createUnit(720, 350, 'twn_army', 'green'),
-            createUnit(740, 400, 'twn_army', 'green')
+            { x: 700, y: 300, type: 'twn_army', color: 'green' },
+            { x: 720, y: 350, type: 'twn_army', color: 'green' },
+            { x: 740, y: 400, type: 'twn_army', color: 'green' }
         );
 
         await saveUnits();
@@ -342,7 +348,6 @@
 
     draw(); // 重繪畫面
 }
-
 
         async function syncUnits() {
             if (isPendingChange) return;
@@ -604,46 +609,8 @@ async function performAttackOnTarget(target) {
         document.addEventListener('keydown',e=>{ if(e.key==='Delete'&&selectedUnit){ deleteUnit(selectedUnit); }});
 
         canvas.addEventListener('mousedown',async e=>{ if(e.button===2) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(currentTool==='select'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }} else if(currentTool==='delete'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u) await deleteUnit(u);} else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null;} else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null;} else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null;} else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); } else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); } else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); } else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'});} else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'});} draw();});
-        canvas.addEventListener('mousemove', e => {
-    if (!draggingUnit && !rulerStart && !lineStart) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    if (draggingUnit) {
-        // 每回合只能移動一次
-        if (draggingUnit.hasMoved) return;
-
-        const dx = x - dragStart.x;
-        const dy = y - dragStart.y;
-        let nx = draggingUnit.x + dx;
-        let ny = draggingUnit.y + dy;
-
-        // 根據單位類型決定移動距離限制
-        const maxMove = draggingUnit.type === 'pla_landing' ? 50 : MOVE_RANGE;
-
-        const d = Math.hypot(nx - draggingUnit.initialX, ny - draggingUnit.initialY);
-        if (d > maxMove) {
-            const a = Math.atan2(ny - draggingUnit.initialY, nx - draggingUnit.initialX);
-            nx = draggingUnit.initialX + maxMove * Math.cos(a);
-            ny = draggingUnit.initialY + maxMove * Math.sin(a);
-        }
-
-        draggingUnit.x = nx;
-        draggingUnit.y = ny;
-        dragStart = { x, y };
-
-    } else if (rulerStart) {
-        rulerEnd = { x, y };
-    } else if (lineStart) {
-        lineEnd = { x, y };
-    }
-
-    draw();
-});
+        canvas.addEventListener('mousemove',e=>{ if(!draggingUnit&&!rulerStart&&!lineStart) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy; const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY); if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);} draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y}; } else if(rulerStart){ rulerEnd={x,y}; } else if(lineStart){ lineEnd={x,y}; } draw(); });
+        canvas.addEventListener('mouseup', async e => {
     if (e.button === 2) return;
 
     const rect = canvas.getBoundingClientRect();
