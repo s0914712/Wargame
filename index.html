@@ -683,7 +683,6 @@ async function performAttackOnTarget(target) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ room: enemyRoom, x: target.x, y: target.y })
             });
-            await saveEnemyUnits(); // 新增這行
         } catch (err) {
             console.error('Error sending delete or save command:', err);
         }
