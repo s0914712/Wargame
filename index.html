@@ -310,71 +310,70 @@ async function selectRoom() {
                 document.getElementById('redIp').textContent=d.room_state.red_ip||'Not joined';
             } catch{} }
         async function addInitialSpecialUnits() {
+    // ✅ 安全初始化：清除狀態避免錯誤
+    draggingUnit = null;
+    selectedUnit = null;
+    attackMode = false;
+    contextMenu.style.display = 'none';
+    attackMenu.style.display = 'none';
+
     if (currentRoom === 'red') {
-        // 清空紅軍單位
         redUnits.length = 0;
 
-        // 新增 5 艘 PLA Navy
+        // 5 艘 PLA Navy
         redUnits.push(
-            { x: 80, y: 100, type: 'pla_navy', color: 'red' },
-            { x: 100, y: 150, type: 'pla_navy', color: 'red' },
-            { x: 120, y: 200, type: 'pla_navy', color: 'red' },
-            { x: 140, y: 250, type: 'pla_navy', color: 'red' },
-            { x: 160, y: 300, type: 'pla_navy', color: 'red' }
+            createUnit(80, 100, 'pla_navy', 'red'),
+            createUnit(100, 150, 'pla_navy', 'red'),
+            createUnit(120, 200, 'pla_navy', 'red'),
+            createUnit(140, 250, 'pla_navy', 'red'),
+            createUnit(160, 300, 'pla_navy', 'red')
         );
 
-        // 新增 10 架 PLA 飛機
+        // 10 架 PLA 飛機
         for (let i = 0; i < 10; i++) {
-            redUnits.push({
-                x: 200 + i * 20,
-                y: 80,
-                type: 'pla_plane',
-                color: 'rgba(255,150,150,1)'
-            });
+            redUnits.push(createUnit(
+                200 + i * 20, 80, 'pla_plane', 'rgba(255,150,150,1)'
+            ));
         }
 
-        // 新增 3 艘登陸艦
+        // 3 艘 登陸艦
         redUnits.push(
-            { x: 60, y: 350, type: 'pla_landing', color: 'orange' },
-            { x: 60, y: 400, type: 'pla_landing', color: 'orange' },
-            { x: 60, y: 450, type: 'pla_landing', color: 'orange' }
+            createUnit(60, 350, 'pla_landing', 'orange'),
+            createUnit(60, 400, 'pla_landing', 'orange'),
+            createUnit(60, 450, 'pla_landing', 'orange')
         );
 
         await saveUnits();
+
     } else if (currentRoom === 'blue') {
-        // 清空藍軍單位
         blueUnits.length = 0;
 
-        // 新增 4 艘 Taiwan Navy
-      blueUnits.push(
-    { x: 460, y: 320, type: 'twn', color: 'blue' },
-    { x: 480, y: 340, type: 'twn', color: 'blue' },
-    { x: 500, y: 360, type: 'twn', color: 'blue' },
-    { x: 520, y: 380, type: 'twn', color: 'blue' }
-);
+        // 4 艘 台灣海軍（部署台灣西部）
+        blueUnits.push(
+            createUnit(460, 320, 'twn', 'blue'),
+            createUnit(480, 340, 'twn', 'blue'),
+            createUnit(500, 360, 'twn', 'blue'),
+            createUnit(520, 380, 'twn', 'blue')
+        );
 
-
-        // 新增 5 架 Taiwan 飛機
+        // 5 架 台灣飛機
         for (let i = 0; i < 5; i++) {
-            blueUnits.push({
-                x: 400 ,
-                y: 80+ i * 20,
-                type: 'twn_plane',
-                color: 'rgba(150,150,255,1)'
-            });
+            blueUnits.push(createUnit(
+                400, 80 + i * 20, 'twn_plane', 'rgba(150,150,255,1)'
+            ));
         }
 
-        // 新增 3 個地面部隊（畫菱形）
+        // 3 個地面部隊（畫菱形）
         blueUnits.push(
-            { x: 700, y: 300, type: 'twn_army', color: 'green' },
-            { x: 720, y: 350, type: 'twn_army', color: 'green' },
-            { x: 740, y: 400, type: 'twn_army', color: 'green' }
+            createUnit(700, 300, 'twn_army', 'green'),
+            createUnit(720, 350, 'twn_army', 'green'),
+            createUnit(740, 400, 'twn_army', 'green')
         );
 
         await saveUnits();
     }
 
-    draw(); // 重繪畫面
+    draw(); // ✅ 重繪畫面
 }
 
         async function syncUnits() {
