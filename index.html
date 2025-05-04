@@ -350,24 +350,24 @@ async function selectRoom() {
 
         // 4 艘 台灣海軍（部署台灣西部）
         blueUnits.push(
-            createUnit(400, 320, 'twn', 'blue'),
-            createUnit(400, 340, 'twn', 'blue'),
-            createUnit(400, 360, 'twn', 'blue'),
-            createUnit(400, 380, 'twn', 'blue')
+            createUnit(500, 320, 'twn', 'blue'),
+            createUnit(500, 340, 'twn', 'blue'),
+            createUnit(450, 360, 'twn', 'blue'),
+            createUnit(450, 380, 'twn', 'blue')
         );
 
         // 5 架 台灣飛機
         for (let i = 0; i < 5; i++) {
             blueUnits.push(createUnit(
-                400, 80 + i * 20, 'twn_plane', 'rgba(150,150,255,1)'
+                500, 80 + i * 40, 'twn_plane', 'rgba(150,150,255,1)'
             ));
         }
 
         // 3 個地面部隊（畫菱形）
         blueUnits.push(
-            createUnit(700, 300, 'twn_army', 'green'),
-            createUnit(720, 350, 'twn_army', 'green'),
-            createUnit(740, 400, 'twn_army', 'green')
+            createUnit(600, 300, 'twn_army', 'green'),
+            createUnit(620, 350, 'twn_army', 'green'),
+            createUnit(640, 400, 'twn_army', 'green')
         );
 
         await saveUnits();
