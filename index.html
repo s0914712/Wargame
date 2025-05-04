@@ -609,16 +609,57 @@ async function performAttackOnTarget(target) {
         document.addEventListener('keydown',e=>{ if(e.key==='Delete'&&selectedUnit){ deleteUnit(selectedUnit); }});
 
         canvas.addEventListener('mousedown',async e=>{ if(e.button===2) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(currentTool==='select'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u){ draggingUnit=u; selectedUnit=u; dragStart={x,y}; }} else if(currentTool==='delete'){ const list=currentRoom==='blue'?blueUnits:redUnits; const u=list.find(u=>Math.hypot(x-u.x,y-u.y)<=8); if(u) await deleteUnit(u);} else if(currentTool==='ruler'){ rulerStart={x,y}; rulerEnd=null;} else if(currentTool==='line'){ lineStart={x,y}; lineEnd=null;} else if(currentTool==='last_known'){ lastKnownPosition={x,y}; currentTool=null;} else if(currentTool==='pla_navy'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'red',type:'pla_navy'}); saveUnits(); } else if(currentTool==='pla_plane'&&currentRoom==='red'){ redUnits.push({x,y,initialX:x,initialY:y,color:'rgba(255,150,150,1)',type:'pla_plane'}); saveUnits(); } else if(currentTool==='twn'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'blue',type:'twn'}); saveUnits(); } else if(currentTool==='twn_plane'&&currentRoom==='blue'){ blueUnits.push({x,y,initialX:x,initialY:y,color:'rgba(150,150,255,1)',type:'twn_plane'}); saveUnits(); } else if(currentTool==='small_search'){ circles.push({x,y,radius:35,color:'yellow'});} else if(currentTool==='large_search'){ circles.push({x,y,radius:50,color:'yellow'});} draw();});
-        canvas.addEventListener('mousemove',e=>{ if(!draggingUnit&&!rulerStart&&!lineStart) return; const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; if(draggingUnit){ const dx=x-dragStart.x, dy=y-dragStart.y; let nx=draggingUnit.x+dx, ny=draggingUnit.y+dy; const d=Math.hypot(nx-draggingUnit.initialX,ny-draggingUnit.initialY); if(d>MOVE_RANGE){ const a=Math.atan2(ny-draggingUnit.initialY,nx-draggingUnit.initialX); nx=draggingUnit.initialX+MOVE_RANGE*Math.cos(a); ny=draggingUnit.initialY+MOVE_RANGE*Math.sin(a);} draggingUnit.x=nx; draggingUnit.y=ny; dragStart={x,y}; } else if(rulerStart){ rulerEnd={x,y}; } else if(lineStart){ lineEnd={x,y}; } draw(); });
-        canvas.addEventListener('mouseup', async e => {
+        canvas.addEventListener('mousemove', e => {
+    if (!draggingUnit && !rulerStart && !lineStart) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    if (draggingUnit) {
+        // 只能移動一次
+        if (draggingUnit.hasMoved) return;
+
+        const dx = x - dragStart.x;
+        const dy = y - dragStart.y;
+        let nx = draggingUnit.x + dx;
+        let ny = draggingUnit.y + dy;
+
+        // 根據類型限制移動距離
+        const maxMove = draggingUnit.type === 'pla_landing' ? 50 : MOVE_RANGE;
+        const d = Math.hypot(nx - draggingUnit.initialX, ny - draggingUnit.initialY);
+
+        if (d > maxMove) {
+            const a = Math.atan2(ny - draggingUnit.initialY, nx - draggingUnit.initialX);
+            nx = draggingUnit.initialX + maxMove * Math.cos(a);
+            ny = draggingUnit.initialY + maxMove * Math.sin(a);
+        }
+
+        draggingUnit.x = nx;
+        draggingUnit.y = ny;
+        dragStart = { x, y };
+        draw();
+    } else if (rulerStart) {
+        rulerEnd = { x, y };
+    } else if (lineStart) {
+        lineEnd = { x, y };
+    }
+
+    draw();
+});
+canvas.addEventListener('mouseup', async e => {
     if (e.button === 2) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     if (draggingUnit) {
-        // ✅ 更新新的初始位置，避免範圍圈仍在舊位置
+        draggingUnit.hasMoved = true;
         draggingUnit.initialX = draggingUnit.x;
         draggingUnit.initialY = draggingUnit.y;
 
@@ -640,11 +681,19 @@ async function performAttackOnTarget(target) {
 
     draw();
     checkVictoryCondition();
-
 });
         mapImage.onload = () => { draw(); updateRoomStatus(); startTurn();};
+function resetMovementFlags() {
+    [...redUnits, ...blueUnits].forEach(u => {
+        u.hasMoved = false;
+        u.initialX = u.x;
+        u.initialY = u.y;
+    });
+}
+
 function startTurn() {
-    syncUnits(); // ✅ 每次回合開始時手動同步
+    syncUnits();
+    resetMovementFlags();
     remainingTime = 30;
     updateTurnInfo();
     if (turnTimer) clearInterval(turnTimer);
