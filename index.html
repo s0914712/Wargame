@@ -531,16 +531,16 @@ async function selectRoom() {
 
         // 新增 4 艘 Taiwan Navy
         blueUnits.push(
-            createUnit(250, 200, 'twn', 'blue'),
-            createUnit(270, 250, 'twn', 'blue'),
-            createUnit(290, 300, 'twn', 'blue'),
+            createUnit(310, 200, 'twn', 'blue'),
+            createUnit(310, 250, 'twn', 'blue'),
+            createUnit(310, 300, 'twn', 'blue'),
             createUnit(310, 350, 'twn', 'blue')
         );
 
         // 新增 5 架 Taiwan 飛機
         for (let i = 0; i < 5; i++) {
             blueUnits.push(createUnit(
-                600 + i * 50, 80, 'twn_plane', 'rgba(150,150,255,1)'
+                300, 80 + i * 50, 'twn_plane', 'rgba(150,150,255,1)'
             ));
         }
 
