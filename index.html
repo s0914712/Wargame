@@ -561,8 +561,14 @@ async function selectRoom() {
         function toggleSearchAreas(){ showSearchAreas=!showSearchAreas; draw(); }
         function toggleOpponentPosition(){ showOpponent=!showOpponent; draw(); }
         function setLastKnownPosition(){ currentTool='last_known'; }
-        function endTurn(){ currentPlayer=currentPlayer==='PLA'?'TAIWAN':'PLA'; if(currentPlayer==='PLA') turnCount++; document.getElementById('turnInfo').textContent=`Turn ${turnCount}: ${currentPlayer}'s turn`; draw(); checkVictoryCondition();
-}
+        function endTurn() {
+            currentPlayer = currentPlayer === 'PLA' ? 'TAIWAN' : 'PLA';
+            if (currentPlayer === 'PLA') turnCount++;
+            document.getElementById('turnInfo').textContent = `Turn ${turnCount}: ${currentPlayer}'s turn`;
+            draw();
+            checkVictoryCondition();
+            startTurn();  // ✅ 這行才會 reset hasMoved
+}}
 
         canvas.addEventListener('contextmenu',e=>{
             e.preventDefault(); const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
