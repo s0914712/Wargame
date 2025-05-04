@@ -533,22 +533,22 @@ async function selectRoom() {
         blueUnits.push(
             createUnit(350, 200, 'twn', 'blue'),
             createUnit(350, 250, 'twn', 'blue'),
-            createUnit(360, 300, 'twn', 'blue'),
-            createUnit(360, 350, 'twn', 'blue')
+            createUnit(350, 460, 'twn', 'blue'),
+            createUnit(350, 550, 'twn', 'blue')
         );
 
         // 新增 5 架 Taiwan 飛機
         for (let i = 0; i < 5; i++) {
             blueUnits.push(createUnit(
-                430, 80 + i * 50, 'twn_plane', 'rgba(150,150,255,1)'
+                430, 280 + i * 50, 'twn_plane', 'rgba(150,150,255,1)'
             ));
         }
 
         // 新增 3 個地面部隊
         blueUnits.push(
-            createUnit(500, 300, 'twn_army', 'green'),
-            createUnit(520, 350, 'twn_army', 'green'),
-            createUnit(540, 400, 'twn_army', 'green')
+            createUnit(460, 300, 'twn_army', 'green'),
+            createUnit(460, 350, 'twn_army', 'green'),
+            createUnit(450, 400, 'twn_army', 'green')
         );
 
         await saveUnits();
