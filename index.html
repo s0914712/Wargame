@@ -789,11 +789,12 @@ function createUnit(x, y, type, color) {
         hasMoved: false
     };
 }
-function startTurn() {
-    syncUnits();
-    resetMovementFlags();
+async function startTurn() {
+    await syncUnits();           // 先同步資料
+    resetMovementFlags();       // 再重設移動狀態
     remainingTime = 30;
     updateTurnInfo();
+
     if (turnTimer) clearInterval(turnTimer);
     turnTimer = setInterval(() => {
         remainingTime--;
