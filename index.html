@@ -327,17 +327,17 @@
 
         // 新增 4 艘 Taiwan Navy
         blueUnits.push(
-            { x: 650, y: 100, type: 'twn', color: 'blue' },
-            { x: 670, y: 150, type: 'twn', color: 'blue' },
-            { x: 690, y: 200, type: 'twn', color: 'blue' },
-            { x: 710, y: 250, type: 'twn', color: 'blue' }
+            { x: 250, y: 100, type: 'twn', color: 'blue' },
+            { x: 270, y: 150, type: 'twn', color: 'blue' },
+            { x: 290, y: 200, type: 'twn', color: 'blue' },
+            { x: 310, y: 250, type: 'twn', color: 'blue' }
         );
 
         // 新增 5 架 Taiwan 飛機
         for (let i = 0; i < 5; i++) {
             blueUnits.push({
-                x: 600 + i * 20,
-                y: 80,
+                x: 300 ,
+                y: 80+ i * 20,
                 type: 'twn_plane',
                 color: 'rgba(150,150,255,1)'
             });
