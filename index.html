@@ -744,7 +744,17 @@ function resetMovementFlags() {
         u.initialY = u.y;
     });
 }
-
+function createUnit(x, y, type, color) {
+    return {
+        x,
+        y,
+        initialX: x,
+        initialY: y,
+        type,
+        color,
+        hasMoved: false
+    };
+}
 function startTurn() {
     syncUnits();
     resetMovementFlags();
