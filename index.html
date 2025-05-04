@@ -568,7 +568,7 @@ async function selectRoom() {
             draw();
             checkVictoryCondition();
             startTurn();  // ✅ 這行才會 reset hasMoved
-}}
+}
 
         canvas.addEventListener('contextmenu',e=>{
             e.preventDefault(); const rect=canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top;
